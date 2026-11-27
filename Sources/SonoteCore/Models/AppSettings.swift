@@ -598,6 +598,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
     public var liveSummaryEnabled: Bool = true
     public var liveSummaryIntervalSeconds: Int = 35
     public var showFloatingCapsuleWhileRecording: Bool = true
+    public var enableLiveSubtitleTranslation: Bool = false
     public var customMinutesPrompt: String = ""
 
     // Meeting Detection, Calendar & Global Hotkeys
@@ -688,6 +689,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         liveSummaryEnabled = try c.decodeIfPresent(Bool.self, forKey: .liveSummaryEnabled) ?? d.liveSummaryEnabled
         liveSummaryIntervalSeconds = try c.decodeIfPresent(Int.self, forKey: .liveSummaryIntervalSeconds) ?? d.liveSummaryIntervalSeconds
         showFloatingCapsuleWhileRecording = try c.decodeIfPresent(Bool.self, forKey: .showFloatingCapsuleWhileRecording) ?? d.showFloatingCapsuleWhileRecording
+        enableLiveSubtitleTranslation = try c.decodeIfPresent(Bool.self, forKey: .enableLiveSubtitleTranslation) ?? d.enableLiveSubtitleTranslation
         customMinutesPrompt = try c.decodeIfPresent(String.self, forKey: .customMinutesPrompt) ?? d.customMinutesPrompt
 
         autoDetectMeetings = try c.decodeIfPresent(Bool.self, forKey: .autoDetectMeetings) ?? d.autoDetectMeetings

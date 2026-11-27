@@ -26,9 +26,9 @@ public enum ArchiveBackupError: LocalizedError {
 
     public var errorDescription: String? {
         switch self {
-        case .zipFailed(let msg): return "打包备份归档失败：\(msg)"
-        case .unzipFailed(let msg): return "解压备份归档失败：\(msg)"
-        case .invalidArchive: return "所选文件不是有效的 Sonote 备份包（缺少 meetings 或 voiceprints 数据）。"
+        case .zipFailed(let msg): return SonoteLocale.t("打包备份归档失败：\(msg)", "Failed to create backup archive: \(msg)")
+        case .unzipFailed(let msg): return SonoteLocale.t("解压备份归档失败：\(msg)", "Failed to extract backup archive: \(msg)")
+        case .invalidArchive: return SonoteLocale.t("所选文件不是有效的 Sonote 备份包（缺少 meetings 或 voiceprints 数据）。", "Not a valid Sonote backup archive (missing meetings or voiceprints data).")
         }
     }
 }

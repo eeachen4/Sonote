@@ -12,9 +12,9 @@ public enum LocalMLXLLMError: LocalizedError {
 
     public var errorDescription: String? {
         switch self {
-        case .invalidModelID(let id): return "无效的本地 MLX 模型 ID：\(id)"
-        case .missingConfig(let url): return "模型目录缺少 config.json：\(url.path)"
-        case .emptyGeneration: return "本地 MLX 模型未生成有效回复。"
+        case .invalidModelID(let id): return SonoteLocale.t("无效的本地 MLX 模型 ID：\(id)", "Invalid local MLX model ID: \(id)")
+        case .missingConfig(let url): return SonoteLocale.t("模型目录缺少 config.json：\(url.path)", "Missing config.json in model directory: \(url.path)")
+        case .emptyGeneration: return SonoteLocale.t("本地 MLX 模型未生成有效回复。", "Local MLX model returned an empty response.")
         }
     }
 }

@@ -10,13 +10,13 @@ public enum WebhookPushError: LocalizedError {
     public var errorDescription: String? {
         switch self {
         case .missingURL:
-            return "尚未配置 Webhook 地址。请在「设置 → 协作与备份」中填写飞书、钉钉或自定义 Webhook URL。"
+            return SonoteLocale.t("尚未配置 Webhook 地址。请在「设置 → 协作与备份」中填写飞书、钉钉或自定义 Webhook URL。", "Webhook URL is not configured. Set it in Settings -> Sync & Backup.")
         case .invalidURL(let url):
-            return "无效的 Webhook 地址：\(url)"
+            return SonoteLocale.t("无效的 Webhook 地址：\(url)", "Invalid Webhook URL: \(url)")
         case .httpError(let code, let body):
-            return "Webhook 推送失败 (HTTP \(code))：\(body)"
+            return SonoteLocale.t("Webhook 推送失败 (HTTP \(code))：\(body)", "Webhook push failed (HTTP \(code)): \(body)")
         case .remoteRejected(let msg):
-            return "远端返回错误：\(msg)"
+            return SonoteLocale.t("远端返回错误：\(msg)", "Remote rejected webhook: \(msg)")
         }
     }
 }

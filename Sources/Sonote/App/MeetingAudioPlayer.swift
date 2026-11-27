@@ -10,11 +10,13 @@ final class MeetingAudioPlayer: NSObject, ObservableObject {
     @Published var duration: TimeInterval = 0
     @Published var playbackRate: Float = 1.0
     @Published var loadedFilePath: String?
+    @Published var waveformSamples: [Float] = []
 
     private var player: AVPlayer?
     private var timeObserver: Any?
     private var endObserver: NSObjectProtocol?
     private var durationLoadTask: Task<Void, Never>?
+    private var waveformLoadTask: Task<Void, Never>?
 
     static let availableRates: [Float] = [1.0, 1.25, 1.5, 2.0]
 
@@ -52,6 +54,18 @@ final class MeetingAudioPlayer: NSObject, ObservableObject {
                         self.duration = sec
                     }
                 }
+            }
+        }
+
+        // Compute normalized waveform amplitude bins off the main thread for visual scrubbing
+        waveformLoadTask?.cancel()
+        waveformSamples = []
+        waveformLoadTask = Task.detached(priority: .utility) { [weak self] in
+            let bins = Self.extractWaveformBins(from: url, binCount: 88)
+            guard !Task.isCancelled else { return }
+            await MainActor.run { [weak self] in
+                guard let self, self.loadedFilePath == path else { return }
+                self.waveformSamples = bins
             }
         }
 
@@ -130,6 +144,8 @@ final class MeetingAudioPlayer: NSObject, ObservableObject {
     func stop() {
         durationLoadTask?.cancel()
         durationLoadTask = nil
+        waveformLoadTask?.cancel()
+        waveformLoadTask = nil
         if let timeObserver, let player {
             player.removeTimeObserver(timeObserver)
         }
@@ -145,6 +161,66 @@ final class MeetingAudioPlayer: NSObject, ObservableObject {
         currentTime = 0
         duration = 0
         loadedFilePath = nil
+        waveformSamples = []
+    }
+
+    /// Reads mono/multi-channel audio frames into `binCount` normalized RMS bars (`0.08...1.0`).
+    nonisolated static func extractWaveformBins(from url: URL, binCount: Int = 88) -> [Float] {
+        guard binCount > 0, let file = try? AVAudioFile(forReading: url) else { return [] }
+        let totalFrames = Int(file.length)
+        guard totalFrames > 0 else { return [] }
+
+        let format = file.processingFormat
+        let framesPerBin = max(1, totalFrames / binCount)
+        let chunkSize = min(65_536, max(4096, framesPerBin))
+        guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(chunkSize)) else {
+            return []
+        }
+
+        var rawBins = [Float](repeating: 0, count: binCount)
+        var counts = [Int](repeating: 0, count: binCount)
+        var globalFrame = 0
+
+        while globalFrame < totalFrames {
+            let remaining = totalFrames - globalFrame
+            let toRead = AVAudioFrameCount(min(chunkSize, remaining))
+            do {
+                try file.read(into: buffer, frameCount: toRead)
+            } catch {
+                break
+            }
+            let readCount = Int(buffer.frameLength)
+            if readCount == 0 { break }
+
+            if let channelData = buffer.floatChannelData {
+                let ptr = channelData[0]
+                // Stride for fast decoding on 1-2h recordings while keeping visual accuracy
+                let strideStep = max(1, readCount / 2048)
+                var i = 0
+                while i < readCount {
+                    let binIdx = min(binCount - 1, (globalFrame + i) * binCount / totalFrames)
+                    let s = ptr[i]
+                    rawBins[binIdx] += s * s
+                    counts[binIdx] += 1
+                    i += strideStep
+                }
+            }
+            globalFrame += readCount
+        }
+
+        var rmsBins = [Float](repeating: 0, count: binCount)
+        var maxRMS: Float = 0.0001
+        for i in 0..<binCount {
+            if counts[i] > 0 {
+                let rms = sqrt(rawBins[i] / Float(counts[i]))
+                rmsBins[i] = rms
+                if rms > maxRMS { maxRMS = rms }
+            }
+        }
+        return rmsBins.map { val in
+            let normalized = pow(min(1.0, val / maxRMS), 0.72)
+            return max(0.10, min(1.0, normalized))
+        }
     }
 
     static func formatTime(_ seconds: TimeInterval) -> String {

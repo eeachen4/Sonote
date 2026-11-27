@@ -13,17 +13,17 @@ public enum SystemAudioTapError: LocalizedError {
     public var errorDescription: String? {
         switch self {
         case .failedToCreateTap(let status):
-            return "无法创建系统声音采集通道 (OSStatus \(status))。请在「系统设置 → 隐私与安全性 → 仅系统音频录制」中允许「Sonote」。"
+            return SonoteLocale.t("无法创建系统声音采集通道 (OSStatus \(status))。请在「系统设置 → 隐私与安全性 → 仅系统音频录制」中允许「Sonote」。", "Failed to create system audio tap (OSStatus \(status)). Enable Sonote in System Settings -> Privacy & Security -> System Audio Recording Only.")
         case .failedToReadTapFormat(let status):
-            return "无法读取系统音频格式 (OSStatus \(status))。"
+            return SonoteLocale.t("无法读取系统音频格式 (OSStatus \(status))。", "Failed to read system audio format (OSStatus \(status)).")
         case .failedToCreateAggregateDevice(let status):
-            return "无法创建虚拟音频聚合设备 (OSStatus \(status))。"
+            return SonoteLocale.t("无法创建虚拟音频聚合设备 (OSStatus \(status))。", "Failed to create audio aggregate device (OSStatus \(status)).")
         case .failedToCreateIOProc(let status):
-            return "无法注册音频采集回调 (OSStatus \(status))。"
+            return SonoteLocale.t("无法注册音频采集回调 (OSStatus \(status))。", "Failed to register audio IO callback (OSStatus \(status)).")
         case .failedToStartDevice(let status):
-            return "无法启动系统声音采集 (OSStatus \(status))。"
+            return SonoteLocale.t("无法启动系统声音采集 (OSStatus \(status))。", "Failed to start system audio capture (OSStatus \(status)).")
         case .invalidAudioFormat:
-            return "系统音频格式不受支持。"
+            return SonoteLocale.t("系统音频格式不受支持。", "Unsupported system audio format.")
         }
     }
 }

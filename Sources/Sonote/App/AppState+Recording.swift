@@ -96,6 +96,9 @@ extension AppState {
             Task { @MainActor [weak self] in
                 guard let self, let activeID = self.activeRecordingMeetingID else { return }
                 self.appendTranscriptSegment(segment, to: activeID)
+                if self.isSubtitleBarVisible && self.settings.enableLiveSubtitleTranslation {
+                    self.translateLatestSubtitle(segment.text)
+                }
             }
         }
         transcriptionCoordinator.onStatusNotice = { [weak self] msg in
@@ -155,6 +158,8 @@ extension AppState {
         pendingEndedMeeting = nil
         onHidePromptPanel?()
         setCapsuleVisible(false)
+        setSubtitleBarVisible(false)
+        liveSubtitleTranslation = ""
 
         audioManager.stop()
         refreshAudioStorageStats()
@@ -218,6 +223,41 @@ extension AppState {
         onUpdateCapsuleVisibility?(visible)
     }
 
+    public func setSubtitleBarVisible(_ visible: Bool) {
+        isSubtitleBarVisible = visible
+        if !visible { liveSubtitleTranslation = "" }
+        onUpdateSubtitleVisibility?(visible)
+    }
+
+    public func toggleSubtitleBar() {
+        setSubtitleBarVisible(!isSubtitleBarVisible)
+    }
+
+    public func dismissInterruptedMeetingRecovery() {
+        recoveredInterruptedMeetingID = nil
+    }
+
+    public func recoverInterruptedMeeting(generateSummary: Bool) {
+        guard let id = recoveredInterruptedMeetingID else { return }
+        recoveredInterruptedMeetingID = nil
+        selectedMeetingID = id
+        if generateSummary {
+            Task { await refreshMinutesNow(for: id, isFinal: true) }
+        }
+    }
+
+    func translateLatestSubtitle(_ text: String) {
+        let snapshot = settings
+        Task { [weak self] in
+            guard let self else { return }
+            if let translated = await self.gptClient.translateSubtitleLine(text, settings: snapshot) {
+                await MainActor.run { [weak self] in
+                    self?.liveSubtitleTranslation = translated
+                }
+            }
+        }
+    }
+
     public func collapseToTopLeftMiniWindow() {
         setCapsuleVisible(true)
         onHideMainWindow?()
@@ -247,7 +287,9 @@ extension AppState {
                       let startDate = self.activeRecordingStartDate,
                       !self.isPaused else { return }
                 let elapsed = max(0, Date().timeIntervalSince(startDate) - self.accumulatedPausedSeconds)
-                self.updateMeeting(id: activeID, persist: false) { $0.duration = elapsed }
+                // Crash-safe checkpoint every 30s so duration & segments are safely flushed even during silence
+                let isCheckpoint = Int(elapsed) > 0 && Int(elapsed) % 30 == 0
+                self.updateMeeting(id: activeID, persist: isCheckpoint) { $0.duration = elapsed }
             }
         }
 

@@ -83,8 +83,13 @@ public final class AppState: ObservableObject {
     @Published public var pendingDetectedMeeting: DetectedMeetingApp?
     @Published public var pendingEndedMeeting: DetectedMeetingApp?
 
-    // Floating capsule visibility
+    // Floating capsule & live subtitle bar visibility
     @Published public var isCapsuleVisible: Bool = false
+    @Published public var isSubtitleBarVisible: Bool = false
+    @Published public var liveSubtitleTranslation: String = ""
+
+    // Crash recovery banner for an abnormally interrupted prior recording
+    @Published public var recoveredInterruptedMeetingID: UUID? = nil
 
     // MARK: - Services (internal for domain extensions)
 
@@ -113,6 +118,7 @@ public final class AppState: ObservableObject {
     public var onShowMeetingEndPrompt: ((DetectedMeetingApp) -> Void)?
     public var onHidePromptPanel: (() -> Void)?
     public var onUpdateCapsuleVisibility: ((Bool) -> Void)?
+    public var onUpdateSubtitleVisibility: ((Bool) -> Void)?
     public var onOpenMainWindow: (() -> Void)?
     public var onHideMainWindow: (() -> Void)?
     public var onToggleMainWindow: (() -> Void)?
@@ -129,9 +135,12 @@ public final class AppState: ObservableObject {
         self.settings = loadedSettings
         self.authInspection = AuthManager.shared.inspect(settings: loadedSettings)
 
+        // Check for abnormally interrupted recordings BEFORE loadMeetings normalizes their status
+        let interruptedIDs = MeetingStore.shared.detectInterruptedMeetingIDs()
+
         // Fast-startup path: use meetings_index.json for O(1) instant Home rendering when library is large (>25 meetings)
         let indexEntries = MeetingStore.shared.loadMeetingIndex()
-        if indexEntries.count > 25 {
+        if indexEntries.count > 25 && interruptedIDs.isEmpty {
             self.meetings = indexEntries.map { $0.toLightweightSession() }
             self.dailyTokenLedger = MeetingStore.shared.loadTokenLedger(seedFrom: nil)
             self.hydrateMeetingsInBackground()
@@ -141,6 +150,7 @@ public final class AppState: ObservableObject {
             self.hydratedMeetingIDs = Set(loadedMeetings.map(\.id))
             self.dailyTokenLedger = MeetingStore.shared.loadTokenLedger(seedFrom: loadedMeetings)
         }
+        self.recoveredInterruptedMeetingID = interruptedIDs.first
 
         self.audioStorageStats = MeetingStore.shared.audioStorageStats()
         self.voiceprints = VoiceprintStore.shared.loadProfiles()

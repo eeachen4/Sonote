@@ -29,9 +29,9 @@ public enum UpdateCheckerError: LocalizedError {
 
     public var errorDescription: String? {
         switch self {
-        case .invalidEndpoint: return "无效的更新检查地址"
-        case .httpError(let code): return "检查更新失败 (HTTP \(code))"
-        case .invalidPayload: return "无法解析 GitHub Release 信息"
+        case .invalidEndpoint: return SonoteLocale.t("无效的更新检查地址", "Invalid update check endpoint")
+        case .httpError(let code): return SonoteLocale.t("检查更新失败 (HTTP \(code))", "Update check failed (HTTP \(code))")
+        case .invalidPayload: return SonoteLocale.t("无法解析 GitHub Release 信息", "Could not parse GitHub Release payload")
         }
     }
 }
@@ -41,7 +41,7 @@ public enum UpdateCheckerService {
     public static let defaultRepoSlug = "eeachen4/Sonote"
 
     public static var installedVersion: String {
-        (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String) ?? "1.5.1"
+        (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String) ?? "1.6.0"
     }
 
     public static func checkLatestRelease(

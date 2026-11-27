@@ -13,11 +13,11 @@ public enum VoiceprintError: LocalizedError {
     public var errorDescription: String? {
         switch self {
         case .audioTooShort:
-            return "有效语音时长不足（至少需要 1 秒清晰人声）以提取可靠声纹。"
+            return SonoteLocale.t("有效语音时长不足（至少需要 1 秒清晰人声）以提取可靠声纹。", "Audio sample too short (at least 1s of clear speech required for voiceprint extraction).")
         case .invalidRepository(let id):
-            return "无效的声纹模型仓库 ID：\(id)"
+            return SonoteLocale.t("无效的声纹模型仓库 ID：\(id)", "Invalid voiceprint model repository ID: \(id)")
         case .recordingFailed(let msg):
-            return "声纹录音失败：\(msg)"
+            return SonoteLocale.t("声纹录音失败：\(msg)", "Voiceprint recording failed: \(msg)")
         }
     }
 }

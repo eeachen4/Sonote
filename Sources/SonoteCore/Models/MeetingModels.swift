@@ -531,22 +531,22 @@ public struct MeetingSession: Identifiable, Codable, Equatable, Sendable {
         guard !q.isEmpty else { return nil }
 
         if let seg = segments.first(where: { $0.text.localizedCaseInsensitiveContains(q) }) {
-            return "逐字稿 \(seg.formattedTimestamp) · \(Self.extractExcerpt(from: seg.text, around: q))"
+            return "\(SonoteLocale.t("逐字稿", "Transcript")) \(seg.formattedTimestamp) · \(Self.extractExcerpt(from: seg.text, around: q))"
         }
         if let item = minutes.actionItems.first(where: { $0.task.localizedCaseInsensitiveContains(q) || $0.owner.localizedCaseInsensitiveContains(q) }) {
-            return "待办 · \(item.task)（\(item.owner)）"
+            return "\(SonoteLocale.t("待办", "Todo")) · \(item.task) (\(item.owner))"
         }
         if let topic = minutes.topics.first(where: { $0.title.localizedCaseInsensitiveContains(q) || $0.points.contains(where: { $0.localizedCaseInsensitiveContains(q) }) }) {
             if let pt = topic.points.first(where: { $0.localizedCaseInsensitiveContains(q) }) {
-                return "要点 · \(Self.extractExcerpt(from: pt, around: q))"
+                return "\(SonoteLocale.t("要点", "Point")) · \(Self.extractExcerpt(from: pt, around: q))"
             }
-            return "议题 · \(topic.title)"
+            return "\(SonoteLocale.t("议题", "Topic")) · \(topic.title)"
         }
         if let decision = minutes.decisions.first(where: { $0.localizedCaseInsensitiveContains(q) }) {
-            return "决议 · \(Self.extractExcerpt(from: decision, around: q))"
+            return "\(SonoteLocale.t("决议", "Decision")) · \(Self.extractExcerpt(from: decision, around: q))"
         }
         if manualNotes.localizedCaseInsensitiveContains(q) {
-            return "随手记 · \(Self.extractExcerpt(from: manualNotes.replacingOccurrences(of: "\n", with: " "), around: q))"
+            return "\(SonoteLocale.t("随手记", "Notes")) · \(Self.extractExcerpt(from: manualNotes.replacingOccurrences(of: "\n", with: " "), around: q))"
         }
         if minutes.overview.localizedCaseInsensitiveContains(q) {
             return Self.extractExcerpt(from: minutes.overview, around: q)

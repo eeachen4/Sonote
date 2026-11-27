@@ -1172,6 +1172,63 @@ final class SonoteTests: XCTestCase {
         XCTAssertEqual(light.tokenUsage.totalTokens, 1500)
     }
 
+    // MARK: - Interrupted Session Recovery, Subtitle Settings & Localized Core Errors Tests
+
+    func testInterruptedRecordingRecoveryAndLocalizedCoreErrors() throws {
+        defer { SonoteLocale.isEnglish = false }
+
+        // 1. Interrupted session detection & one-time normalization
+        let tmpDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("sonote-recovery-test-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: tmpDir) }
+        let store = MeetingStore(baseDirectory: tmpDir)
+
+        let crashed = MeetingSession(
+            title: "意外断电会议",
+            sourceAppName: "腾讯会议",
+            duration: 620,
+            status: .recording,
+            segments: [TranscriptSegment(timestamp: 10, speaker: .me, text: "已保存的检查点逐字稿")]
+        )
+        let normal = MeetingSession(
+            title: "已完成会议",
+            sourceAppName: "Zoom",
+            duration: 300,
+            status: .completed,
+            minutes: SmartMinutes(overview: "已完成", isFinalized: true)
+        )
+        store.saveMeeting(crashed)
+        store.saveMeeting(normal)
+
+        let interruptedIDs = store.detectInterruptedMeetingIDs()
+        XCTAssertEqual(interruptedIDs, [crashed.id])
+
+        // After loadMeetings normalizes & persists status -> no longer flagged on next launch
+        let loaded = store.loadMeetings()
+        XCTAssertEqual(loaded.count, 2)
+        XCTAssertTrue(loaded.allSatisfy { $0.status == .completed })
+        XCTAssertTrue(store.detectInterruptedMeetingIDs().isEmpty)
+
+        // 2. Live subtitle translation setting backward-compatible decoding
+        let legacy = try JSONDecoder().decode(AppSettings.self, from: Data("{}".utf8))
+        XCTAssertFalse(legacy.enableLiveSubtitleTranslation)
+
+        // 3. Complete SonoteCore bilingual errors & search snippets in English mode
+        SonoteLocale.isEnglish = true
+        XCTAssertTrue((GPTClientError.emptyResponse.errorDescription ?? "").contains("empty"))
+        XCTAssertTrue((WebhookPushError.missingURL.errorDescription ?? "").contains("Webhook URL"))
+        XCTAssertTrue((MicrophoneCaptureError.permissionDenied.errorDescription ?? "").contains("Microphone"))
+        XCTAssertTrue((SystemAudioTapError.invalidAudioFormat.errorDescription ?? "").contains("Unsupported"))
+        XCTAssertTrue((ArchiveBackupError.invalidArchive.errorDescription ?? "").contains("Not a valid"))
+        XCTAssertTrue((UpdateCheckerError.invalidPayload.errorDescription ?? "").contains("GitHub Release"))
+        XCTAssertTrue((VoiceprintError.audioTooShort.errorDescription ?? "").contains("too short"))
+        XCTAssertTrue((AudioFileImportError.noAudioTrack.errorDescription ?? "").contains("No audio track"))
+        XCTAssertTrue((LocalMLXLLMError.emptyGeneration.errorDescription ?? "").contains("empty"))
+
+        let snippet = crashed.searchSnippet(for: "检查点")
+        XCTAssertTrue(snippet?.hasPrefix("Transcript ") == true)
+    }
+
     // MARK: - Opt-in Live Hardware Verification for DeepFilterNet3, ECAPA-TDNN & Sortformer (SONOTE_LIVE_V15=1)
 
     func testLiveVoiceprintDenoiserAndDiarization() async throws {

@@ -7,8 +7,8 @@ public enum AudioFileImportError: LocalizedError {
 
     public var errorDescription: String? {
         switch self {
-        case .unreadableMedia(let msg): return "无法读取音视频文件：\(msg)"
-        case .noAudioTrack: return "该文件中未找到音轨。"
+        case .unreadableMedia(let msg): return SonoteLocale.t("无法读取音视频文件：\(msg)", "Could not read media file: \(msg)")
+        case .noAudioTrack: return SonoteLocale.t("该文件中未找到音轨。", "No audio track found in this media file.")
         }
     }
 }

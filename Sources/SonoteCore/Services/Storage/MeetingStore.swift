@@ -272,6 +272,32 @@ public final class MeetingStore: @unchecked Sendable {
         return audioDirectory.appendingPathComponent("\(meetingID.uuidString).m4a")
     }
 
+    /// Detects meetings left in `.recording` or `.paused` state from an abnormal termination (crash/power loss).
+    public func detectInterruptedMeetingIDs() -> [UUID] {
+        ensureDirectories()
+        guard let urls = try? FileManager.default.contentsOfDirectory(
+            at: meetingsDirectory,
+            includingPropertiesForKeys: nil,
+            options: [.skipsHiddenFiles]
+        ) else {
+            return []
+        }
+        var interrupted: [(id: UUID, startedAt: Date)] = []
+        for url in urls where url.pathExtension.lowercased() == "json" {
+            guard let data = try? Data(contentsOf: url),
+                  let session = try? decoder.decode(MeetingSession.self, from: data) else { continue }
+            if session.status == .recording || session.status == .paused {
+                let hasData = !session.segments.isEmpty
+                    || !session.manualNotes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                    || (session.audioFilePath != nil && FileManager.default.fileExists(atPath: session.audioFilePath!))
+                if hasData {
+                    interrupted.append((session.id, session.startedAt))
+                }
+            }
+        }
+        return interrupted.sorted { $0.startedAt > $1.startedAt }.map(\.id)
+    }
+
     public func loadMeetings() -> [MeetingSession] {
         ensureDirectories()
         guard let urls = try? FileManager.default.contentsOfDirectory(
@@ -286,9 +312,12 @@ public final class MeetingStore: @unchecked Sendable {
         for url in urls where url.pathExtension.lowercased() == "json" {
             guard let data = try? Data(contentsOf: url) else { continue }
             if var session = try? decoder.decode(MeetingSession.self, from: data) {
-                // If app crashed mid-recording previously, mark cleanly as completed
+                // If app crashed mid-recording previously, mark cleanly as completed and persist once
                 if session.status == .recording || session.status == .paused || session.status == .summarizing {
                     session.status = .completed
+                    if let fixed = try? encoder.encode(session) {
+                        try? fixed.write(to: url, options: .atomic)
+                    }
                 }
                 sessions.append(session)
             }

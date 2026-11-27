@@ -6,6 +6,7 @@ import SonoteCore
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private let promptController = FloatingPromptPanelController()
     private let capsuleController = LiveCapsulePanelController()
+    private let subtitleController = LiveSubtitlePanelController()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let appState = AppState.shared
@@ -23,6 +24,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         appState.onUpdateCapsuleVisibility = { [weak self] visible in
             self?.capsuleController.setVisible(visible, appState: appState)
+        }
+        appState.onUpdateSubtitleVisibility = { [weak self] visible in
+            self?.subtitleController.setVisible(visible, appState: appState)
         }
         appState.onOpenMainWindow = { [weak self] in
             self?.bringMainWindowToFront()

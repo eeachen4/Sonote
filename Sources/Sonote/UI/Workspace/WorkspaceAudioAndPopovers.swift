@@ -60,15 +60,14 @@ struct AudioPlaybackStrip: View {
                 .foregroundStyle(AppTheme.textSecondary)
                 .frame(width: 42, alignment: .trailing)
 
-            Slider(
-                value: Binding(
-                    get: { player.currentTime },
-                    set: { player.seek(to: $0, autoPlay: false) }
-                ),
-                in: 0...max(0.1, player.duration)
-            )
-            .tint(AppTheme.brandPrimary)
-            .controlSize(.small)
+            AudioWaveformScrubber(
+                samples: player.waveformSamples,
+                progress: player.duration > 0 ? min(1, max(0, player.currentTime / player.duration)) : 0,
+                duration: player.duration
+            ) { newFraction in
+                let target = newFraction * max(0.1, player.duration)
+                player.seek(to: target, autoPlay: player.isPlaying)
+            }
 
             Text(MeetingAudioPlayer.formatTime(player.duration))
                 .font(.system(size: 11.5, design: .monospaced))
@@ -112,6 +111,92 @@ struct AudioPlaybackStrip: View {
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .strokeBorder(AppTheme.subtleBorder, lineWidth: 1)
         )
+    }
+}
+
+// MARK: - Interactive Audio Waveform Scrubber
+
+struct AudioWaveformScrubber: View {
+    let samples: [Float]
+    let progress: Double
+    let duration: TimeInterval
+    let onSeekFraction: (Double) -> Void
+
+    @State private var hoverFraction: Double? = nil
+    @State private var isDragging: Bool = false
+
+    private var displayBars: [Float] {
+        if !samples.isEmpty { return samples }
+        // Subtle flat placeholder bars while envelope finishes decoding
+        return Array(repeating: 0.22, count: 64)
+    }
+
+    var body: some View {
+        GeometryReader { geo in
+            let w = max(1, geo.size.width)
+            let h = geo.size.height
+            let bars = displayBars
+            let activeFrac = isDragging ? (hoverFraction ?? progress) : progress
+
+            ZStack(alignment: .leading) {
+                HStack(alignment: .center, spacing: 2) {
+                    ForEach(0..<bars.count, id: \.self) { idx in
+                        let frac = Double(idx) / Double(max(1, bars.count - 1))
+                        let isPlayed = frac <= activeFrac
+                        let isHovered = hoverFraction.map { frac <= $0 && !isPlayed } ?? false
+                        let barH = max(3, CGFloat(bars[idx]) * (h - 6))
+                        Capsule()
+                            .fill(
+                                isPlayed
+                                    ? AppTheme.brandPrimary
+                                    : (isHovered ? AppTheme.brandPrimary.opacity(0.42) : AppTheme.waveformInactive.opacity(0.45))
+                            )
+                            .frame(maxWidth: .infinity)
+                            .frame(height: barH)
+                    }
+                }
+                .frame(height: h)
+
+                // Hover time tooltip badge
+                if let hoverFrac = hoverFraction, duration > 0 {
+                    let hoverX = min(max(24, CGFloat(hoverFrac) * w), w - 24)
+                    Text(MeetingAudioPlayer.formatTime(hoverFrac * duration))
+                        .font(.system(size: 9.5, weight: .medium, design: .monospaced))
+                        .foregroundStyle(AppTheme.textPrimary)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 1.5)
+                        .background(Capsule().fill(AppTheme.elevatedSurface))
+                        .overlay(Capsule().strokeBorder(AppTheme.inputBorder, lineWidth: 0.8))
+                        .position(x: hoverX, y: -4)
+                        .allowsHitTesting(false)
+                }
+            }
+            .contentShape(Rectangle())
+            .onContinuousHover { phase in
+                switch phase {
+                case .active(let loc):
+                    hoverFraction = min(1, max(0, Double(loc.x / w)))
+                case .ended:
+                    if !isDragging { hoverFraction = nil }
+                }
+            }
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { value in
+                        isDragging = true
+                        let frac = min(1, max(0, Double(value.location.x / w)))
+                        hoverFraction = frac
+                        onSeekFraction(frac)
+                    }
+                    .onEnded { value in
+                        let frac = min(1, max(0, Double(value.location.x / w)))
+                        onSeekFraction(frac)
+                        isDragging = false
+                        hoverFraction = nil
+                    }
+            )
+        }
+        .frame(height: 26)
     }
 }
 

@@ -58,7 +58,7 @@ public enum ResolvedCredential: Equatable, Sendable {
     public var displayBadge: String {
         switch self {
         case .openAIAPIKey(_, _, let source, _, let providerLabel):
-            let label = providerLabel ?? "OpenAI 兼容"
+            let label = providerLabel ?? SonoteLocale.t("OpenAI 兼容", "OpenAI Compatible")
             return "\(label) (\(source))"
         case .codexOAuth(let oauth):
             if let email = oauth.email, !email.isEmpty {
@@ -71,7 +71,7 @@ public enum ResolvedCredential: Equatable, Sendable {
             return "Gemini (\(source))"
         case .localMLX(let modelID):
             let short = modelID.split(separator: "/").last.map(String.init) ?? modelID
-            return "内置离线 MLX · \(short)"
+            return "\(SonoteLocale.t("内置离线 MLX", "Offline MLX")) · \(short)"
         }
     }
 
@@ -106,9 +106,9 @@ public enum AuthError: LocalizedError {
     public var errorDescription: String? {
         switch self {
         case .missingCredential(let msg): return msg
-        case .fileNotFound(let path): return "找不到凭证文件：\(path)"
-        case .invalidAuthFile(let msg): return "Auth 文件解析失败：\(msg)"
-        case .refreshFailed(let msg): return "刷新 OAuth 凭证失败：\(msg)"
+        case .fileNotFound(let path): return SonoteLocale.t("找不到凭证文件：\(path)", "Credential file not found: \(path)")
+        case .invalidAuthFile(let msg): return SonoteLocale.t("Auth 文件解析失败：\(msg)", "Failed to parse Auth file: \(msg)")
+        case .refreshFailed(let msg): return SonoteLocale.t("刷新 OAuth 凭证失败：\(msg)", "OAuth token refresh failed: \(msg)")
         }
     }
 }

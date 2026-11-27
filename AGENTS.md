@@ -117,6 +117,7 @@ Sonote/
 │       └── UI/
 │           ├── Theme.swift                 # ThemeManager + adaptive Light/Dark AppTheme + L("zh", "en")
 │           ├── MainWindowView.swift        # Home dashboard & navigation shell
+│           ├── Home/HomeComponents.swift   # Action cards, meeting rows, paste sheet & window accessor
 │           ├── OnboardingCardView.swift    # Dismissible 3-step first-launch setup checklist
 │           ├── MeetingWorkspaceView.swift  # Post-meeting document + live 2-column split workspace
 │           ├── Workspace/                  # Modular document sections (Transcript, AskAI, Audio/Popovers)

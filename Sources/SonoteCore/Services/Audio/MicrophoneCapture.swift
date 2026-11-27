@@ -8,9 +8,9 @@ public enum MicrophoneCaptureError: LocalizedError {
     public var errorDescription: String? {
         switch self {
         case .permissionDenied:
-            return "未获得麦克风访问权限。请在「系统设置 → 隐私与安全性 → 麦克风」中允许「Sonote」。"
+            return SonoteLocale.t("未获得麦克风访问权限。请在「系统设置 → 隐私与安全性 → 麦克风」中允许「Sonote」。", "Microphone permission denied. Enable Sonote in System Settings -> Privacy & Security -> Microphone.")
         case .invalidInputFormat:
-            return "无法获取有效的麦克风音频格式，请检查本机音频输入设备。"
+            return SonoteLocale.t("无法获取有效的麦克风音频格式，请检查本机音频输入设备。", "Could not read microphone audio format. Check your input device.")
         }
     }
 }

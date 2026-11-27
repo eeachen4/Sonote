@@ -8,10 +8,10 @@ public enum GPTClientError: LocalizedError {
 
     public var errorDescription: String? {
         switch self {
-        case .invalidEndpoint(let url): return "无效的接口地址：\(url)"
-        case .httpError(let code, let detail): return "AI 接口请求失败 (HTTP \(code))：\(detail)"
-        case .emptyResponse: return "AI 未返回有效内容。"
-        case .audioTranscriptionRequiresAPIKey: return "OpenAI 音频转写需要 OpenAI API Key；若使用本机 Codex Auth，请使用「Apple 本机实时识别」。"
+        case .invalidEndpoint(let url): return SonoteLocale.t("无效的接口地址：\(url)", "Invalid API endpoint: \(url)")
+        case .httpError(let code, let detail): return SonoteLocale.t("AI 接口请求失败 (HTTP \(code))：\(detail)", "AI request failed (HTTP \(code)): \(detail)")
+        case .emptyResponse: return SonoteLocale.t("AI 未返回有效内容。", "AI returned an empty response.")
+        case .audioTranscriptionRequiresAPIKey: return SonoteLocale.t("OpenAI 音频转写需要 OpenAI API Key；若使用本机 Codex Auth，请使用「Apple 本机实时识别」。", "OpenAI audio transcription requires an OpenAI API Key; use MLX Qwen3-ASR or Apple Speech otherwise.")
         }
     }
 }
@@ -73,7 +73,10 @@ public final class GPTClient: @unchecked Sendable {
                 backendDescription: credential.displayBadge,
                 modelUsed: model,
                 latencyMs: elapsed,
-                message: "连接成功（回复：\(reply.trimmingCharacters(in: .whitespacesAndNewlines).prefix(30))）"
+                message: SonoteLocale.t(
+                    "连接成功（回复：\(reply.trimmingCharacters(in: .whitespacesAndNewlines).prefix(30))）",
+                    "Connected (reply: \(reply.trimmingCharacters(in: .whitespacesAndNewlines).prefix(30)))"
+                )
             )
         } catch {
             let elapsed = Int(Date().timeIntervalSince(start) * 1000)
@@ -84,6 +87,25 @@ public final class GPTClient: @unchecked Sendable {
                 latencyMs: elapsed,
                 message: error.localizedDescription
             )
+        }
+    }
+
+    /// Lightweight best-effort single-line translation for the live floating subtitle bar.
+    public func translateSubtitleLine(_ text: String, settings: AppSettings) async -> String? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.count >= 4 else { return nil }
+        let hasCJK = trimmed.unicodeScalars.contains { (0x4E00...0x9FFF).contains($0.value) }
+        let targetLang = hasCJK ? "natural concise English" : "自然简洁的简体中文"
+        do {
+            let reply = try await complete(
+                instructions: "You are a real-time meeting caption translator. Output ONLY the translated single line in \(targetLang), with no quotes, notes, or explanations.",
+                userPrompt: trimmed,
+                settings: settings
+            )
+            let cleaned = Self.stripThinkingTags(reply)
+            return cleaned.isEmpty ? nil : cleaned
+        } catch {
+            return nil
         }
     }
 

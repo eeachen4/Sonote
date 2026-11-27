@@ -345,6 +345,19 @@ struct LiveCapsuleView: View {
                 Spacer(minLength: 4)
 
                 Button {
+                    appState.toggleSubtitleBar()
+                } label: {
+                    Image(systemName: appState.isSubtitleBarVisible ? "captions.bubble.fill" : "captions.bubble")
+                        .font(.system(size: 11.5, weight: .semibold))
+                        .foregroundStyle(appState.isSubtitleBarVisible ? AppTheme.brandPrimary : AppTheme.textSecondary)
+                        .frame(width: 26, height: 26)
+                        .background(Circle().fill(appState.isSubtitleBarVisible ? AppTheme.brandSoftFill : AppTheme.softCardBg))
+                        .contentShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .help(appState.isSubtitleBarVisible ? L("隐藏实时字幕条", "Hide Live Captions") : L("开启底部实时字幕条", "Show Live Captions"))
+
+                Button {
                     appState.expandFromMiniWindowToMain()
                 } label: {
                     Image(systemName: "arrow.up.left.and.arrow.down.right")
@@ -480,5 +493,159 @@ private struct MiniDottedWaveformView: View {
             next.append(min(1.0, newVal * jitter))
             samples = next
         }
+    }
+}
+
+// MARK: - Floating Live Subtitle Bar (会中底部置顶双语字幕条)
+
+@MainActor
+final class LiveSubtitlePanelController {
+    private var panel: FloatingHUDPanel?
+
+    func setVisible(_ visible: Bool, appState: AppState) {
+        if visible {
+            show(appState: appState)
+        } else {
+            hide()
+        }
+    }
+
+    private func show(appState: AppState) {
+        if let existing = panel {
+            existing.orderFrontRegardless()
+            return
+        }
+
+        let width: CGFloat = 640
+        let height: CGFloat = 86
+        let screenFrame = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
+        let frame = NSRect(
+            x: screenFrame.midX - width / 2,
+            y: screenFrame.minY + 42,
+            width: width,
+            height: height
+        )
+
+        let panel = FloatingHUDPanel(contentRect: frame)
+        let hosting = AcceptsFirstMouseHostingView(
+            rootView: LiveSubtitleOverlayView(appState: appState, width: width, height: height)
+        )
+        hosting.sizingOptions = []
+        hosting.frame = NSRect(x: 0, y: 0, width: width, height: height)
+        panel.contentView = hosting
+        panel.setFrame(frame, display: true)
+        panel.alphaValue = 0
+        panel.orderFrontRegardless()
+
+        NSAnimationContext.runAnimationGroup { ctx in
+            ctx.duration = 0.18
+            panel.animator().alphaValue = 1
+        }
+        self.panel = panel
+    }
+
+    func hide() {
+        panel?.orderOut(nil)
+        panel = nil
+    }
+}
+
+struct LiveSubtitleOverlayView: View {
+    @ObservedObject var appState: AppState
+    @ObservedObject private var theme = ThemeManager.shared
+    let width: CGFloat
+    let height: CGFloat
+
+    private var captionTuple: (speaker: String, text: String) {
+        if !appState.volatileRemoteText.isEmpty {
+            return (L("远端发言人", "Remote"), appState.volatileRemoteText)
+        }
+        if !appState.volatileMeText.isEmpty {
+            let local = appState.settings.localUserName.trimmingCharacters(in: .whitespacesAndNewlines)
+            return (local.isEmpty ? L("我", "Me") : local, appState.volatileMeText)
+        }
+        if let last = appState.activeRecordingMeeting?.segments.last {
+            return (last.resolvedSpeakerName, last.text)
+        }
+        return (L("实时字幕", "Captions"), L("正在监听会议语音...", "Listening for speech..."))
+    }
+
+    var body: some View {
+        let cap = captionTuple
+        VStack(alignment: .leading, spacing: 5) {
+            HStack(spacing: 8) {
+                HStack(spacing: 5) {
+                    Circle()
+                        .fill(appState.isPaused ? AppTheme.warningAmber : AppTheme.brandPrimary)
+                        .frame(width: 6, height: 6)
+                    Text(cap.speaker)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(Color.white.opacity(0.85))
+                }
+                .padding(.horizontal, 7)
+                .padding(.vertical, 2)
+                .background(Capsule().fill(Color.white.opacity(0.12)))
+
+                Spacer()
+
+                Button {
+                    appState.settings.enableLiveSubtitleTranslation.toggle()
+                    if !appState.settings.enableLiveSubtitleTranslation {
+                        appState.liveSubtitleTranslation = ""
+                    }
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "translate")
+                            .font(.system(size: 10))
+                        Text(appState.settings.enableLiveSubtitleTranslation ? L("双语翻译：开", "Translate: On") : L("双语翻译", "Translate"))
+                            .font(.system(size: 10.5, weight: .medium))
+                    }
+                    .foregroundStyle(appState.settings.enableLiveSubtitleTranslation ? Color.white : Color.white.opacity(0.68))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 2.5)
+                    .background(Capsule().fill(appState.settings.enableLiveSubtitleTranslation ? AppTheme.brandPrimary.opacity(0.85) : Color.white.opacity(0.10)))
+                    .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .help(L("使用当前配置的 AI 模型自动将新句子实时翻译为中/英文", "Translate committed captions live using your active AI model"))
+
+                Button {
+                    appState.setSubtitleBarVisible(false)
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(Color.white.opacity(0.7))
+                        .frame(width: 20, height: 20)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+
+            Text(cap.text)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(Color.white)
+                .lineLimit(appState.liveSubtitleTranslation.isEmpty ? 2 : 1)
+                .truncationMode(.head)
+
+            if !appState.liveSubtitleTranslation.isEmpty {
+                Text(appState.liveSubtitleTranslation)
+                    .font(.system(size: 12.5))
+                    .foregroundStyle(Color.white.opacity(0.76))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .frame(width: width, height: height, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Color(red: 0.08, green: 0.09, blue: 0.12).opacity(0.86))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(Color.white.opacity(0.14), lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.28), radius: 18, y: 6)
     }
 }
