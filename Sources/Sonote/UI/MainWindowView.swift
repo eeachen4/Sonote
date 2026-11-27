@@ -294,8 +294,8 @@ struct MainWindowView: View {
                                     }
                                     .padding(.horizontal, 10)
                                     .padding(.vertical, 5)
-                                    .background(Capsule().fill(AppTheme.elevatedSurface.opacity(0.92)))
-                                    .overlay(Capsule().strokeBorder(AppTheme.subtleBorder, lineWidth: 1))
+                                    .background(Capsule().fill(AppTheme.inputBackground))
+                                    .overlay(Capsule().strokeBorder(AppTheme.inputBorder, lineWidth: 1))
                                 }
                             }
 
@@ -837,17 +837,20 @@ private struct PasteTranscriptSheet: View {
             TextField(L("会议主题（留空由 AI 自动命名）", "Meeting title (optional — AI can name it)"), text: $title)
                 .textFieldStyle(.plain)
                 .font(.system(size: 13.5))
+                .foregroundStyle(AppTheme.textPrimary)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 9)
-                .background(RoundedRectangle(cornerRadius: 9).fill(AppTheme.softCardBg))
-                .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(AppTheme.subtleBorder))
+                .background(RoundedRectangle(cornerRadius: 9, style: .continuous).fill(AppTheme.inputBackground))
+                .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous).strokeBorder(AppTheme.inputBorder, lineWidth: 1))
 
             TextEditor(text: $rawText)
                 .font(.system(size: 13))
+                .foregroundStyle(AppTheme.textPrimary)
+                .scrollContentBackground(.hidden)
                 .padding(8)
                 .frame(minHeight: 210)
-                .background(RoundedRectangle(cornerRadius: 10).fill(AppTheme.softCardBg))
-                .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(AppTheme.subtleBorder))
+                .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(AppTheme.inputBackground))
+                .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(AppTheme.inputBorder, lineWidth: 1))
 
             HStack {
                 Text(L("支持直接粘贴逐字稿、聊天讨论或零散笔记", "Paste transcripts, chat threads, or rough notes"))

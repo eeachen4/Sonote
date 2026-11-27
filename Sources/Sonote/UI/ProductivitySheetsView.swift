@@ -445,8 +445,8 @@ struct CrossMeetingAskAISheet: View {
                     }
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
-                    .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(AppTheme.elevatedSurface))
-                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(AppTheme.subtleBorder, lineWidth: 1))
+                    .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(AppTheme.inputBackground))
+                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(AppTheme.inputBorder, lineWidth: 1))
                 }
             }
         }

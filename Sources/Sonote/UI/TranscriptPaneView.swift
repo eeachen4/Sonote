@@ -166,8 +166,8 @@ struct TranscriptPaneView: View {
                         }
                         .padding(.horizontal, 11)
                         .padding(.vertical, 7)
-                        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(AppTheme.elevatedSurface))
-                        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(AppTheme.brandPrimary.opacity(0.32), lineWidth: 1))
+                        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(AppTheme.inputBackground))
+                        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(AppTheme.brandPrimary.opacity(0.38), lineWidth: 1))
                     } else {
                         HStack {
                             Button {

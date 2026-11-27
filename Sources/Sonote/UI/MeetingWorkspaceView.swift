@@ -692,8 +692,8 @@ struct CompletedMeetingDocumentView: View {
                 .scrollContentBackground(.hidden)
                 .frame(minHeight: 72)
                 .padding(10)
-                .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(AppTheme.elevatedSurface))
-                .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(AppTheme.subtleBorder, lineWidth: 1))
+                .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(AppTheme.inputBackground))
+                .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(AppTheme.inputBorder, lineWidth: 1))
             } else {
                 Text(meeting.manualNotes)
                     .font(.system(size: 13))

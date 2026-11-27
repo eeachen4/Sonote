@@ -53,8 +53,8 @@ extension CompletedMeetingDocumentView {
                     }
                     .padding(.horizontal, 9)
                     .padding(.vertical, 5)
-                    .background(Capsule().fill(AppTheme.softCardBg))
-                    .overlay(Capsule().strokeBorder(AppTheme.subtleBorder, lineWidth: 1))
+                    .background(Capsule().fill(AppTheme.inputBackground))
+                    .overlay(Capsule().strokeBorder(AppTheme.inputBorder, lineWidth: 1))
 
                     Spacer()
 

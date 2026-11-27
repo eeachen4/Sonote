@@ -368,10 +368,12 @@ struct DoubaoOutlineMinutesView: View {
                                 set: { val in appState.updateMeeting(id: meeting.id) { $0.minutes.overview = val } }
                             ))
                             .font(.system(size: 13))
+                            .foregroundStyle(AppTheme.textPrimary)
+                            .scrollContentBackground(.hidden)
                             .frame(minHeight: 68)
-                            .padding(6)
-                            .background(RoundedRectangle(cornerRadius: 8).fill(AppTheme.softCardBg))
-                            .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(AppTheme.subtleBorder))
+                            .padding(8)
+                            .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(AppTheme.inputBackground))
+                            .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(AppTheme.inputBorder, lineWidth: 1))
                         } else {
                             inlineMarkdownText(meeting.minutes.overview)
                                 .font(.system(size: 13.5))
