@@ -49,8 +49,11 @@ for bundle in "$PRODUCTS_DIR"/*.bundle; do
 done
 
 # If default.metallib exists inside mlx-swift_Cmlx.bundle, also expose a copy in Contents/Resources/mlx.metallib
-METALLIB=$(find "$PRODUCTS_DIR" -name "default.metallib" -o -name "mlx.metallib" | head -n 1 || true)
-if [[ -n "$METALLIB" ]]; then
+METALLIB="$PRODUCTS_DIR/mlx-swift_Cmlx.bundle/Contents/Resources/default.metallib"
+if [[ ! -f "$METALLIB" ]]; then
+  METALLIB=$(find "$PRODUCTS_DIR" -maxdepth 4 \( -name "default.metallib" -o -name "mlx.metallib" \) | head -n 1 || true)
+fi
+if [[ -n "$METALLIB" && -f "$METALLIB" ]]; then
   echo "  Bundling Metal shader library: $METALLIB"
   cp "$METALLIB" "$APP_BUNDLE/Contents/Resources/mlx.metallib"
   cp "$METALLIB" "$APP_BUNDLE/Contents/MacOS/mlx.metallib"

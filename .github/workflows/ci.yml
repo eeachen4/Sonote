@@ -12,12 +12,12 @@ concurrency:
 
 jobs:
   build-and-test:
-    name: Build & Test (macOS 15 Apple Silicon)
-    runs-on: macos-15
+    name: Build & Test (macOS Apple Silicon)
+    runs-on: macos-26
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Select latest Xcode
         run: |
@@ -28,7 +28,7 @@ jobs:
           swift --version
 
       - name: Cache SwiftPM & DerivedData
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             .build/xcode-ci/SourcePackages
