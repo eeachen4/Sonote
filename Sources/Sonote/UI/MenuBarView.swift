@@ -181,6 +181,9 @@ struct MenuBarView: View {
         .background(AppTheme.elevatedSurface)
         .tint(AppTheme.brandPrimary)
         .preferredColorScheme(theme.preferredColorScheme)
+        .onAppear {
+            appState.swiftUIOpenMainWindow = { openWindow(id: "main") }
+        }
     }
 
     private func openMainWorkspace() {

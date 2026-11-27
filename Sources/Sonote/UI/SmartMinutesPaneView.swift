@@ -69,6 +69,7 @@ struct SmartMinutesPaneView: View {
                                 RoundedRectangle(cornerRadius: 8, style: .continuous)
                                     .fill(AppTheme.neutralPill)
                             )
+                            .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                     }
                     .buttonStyle(.plain)
                     .help("收起为屏幕左上角悬浮小窗")

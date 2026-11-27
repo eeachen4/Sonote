@@ -26,6 +26,12 @@ final class FloatingHUDPanel: NSPanel {
     override var canBecomeMain: Bool { false }
 }
 
+/// Ensures clicks on buttons inside a non-activating floating HUD panel fire on the very first click
+/// even while another app (Zoom / Feishu / Chrome) is focused.
+final class AcceptsFirstMouseHostingView<Content: View>: NSHostingView<Content> {
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+}
+
 // MARK: - Meeting Detection Prompt HUD Controller (Compact, Fixed-Size Doubao Card)
 
 @MainActor
@@ -70,7 +76,7 @@ final class FloatingPromptPanelController {
         let frame = NSRect(x: originX, y: originY, width: width, height: height)
 
         let panel = FloatingHUDPanel(contentRect: frame)
-        let hosting = NSHostingView(rootView: rootView)
+        let hosting = AcceptsFirstMouseHostingView(rootView: rootView)
         // Lock sizing so SwiftUI never unexpectedly stretches the panel height
         hosting.sizingOptions = []
         hosting.frame = NSRect(x: 0, y: 0, width: width, height: height)
@@ -290,7 +296,7 @@ final class LiveCapsulePanelController {
         )
 
         let panel = FloatingHUDPanel(contentRect: frame)
-        let hosting = NSHostingView(rootView: LiveCapsuleView(appState: appState, width: width, height: height))
+        let hosting = AcceptsFirstMouseHostingView(rootView: LiveCapsuleView(appState: appState, width: width, height: height))
         hosting.sizingOptions = []
         hosting.frame = NSRect(x: 0, y: 0, width: width, height: height)
         panel.contentView = hosting
@@ -313,8 +319,11 @@ final class LiveCapsulePanelController {
 
 struct LiveCapsuleView: View {
     @ObservedObject var appState: AppState
+    @ObservedObject private var theme = ThemeManager.shared
     let width: CGFloat
     let height: CGFloat
+
+    @State private var isHoveringExpand = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 9) {
@@ -338,21 +347,28 @@ struct LiveCapsuleView: View {
                     appState.expandFromMiniWindowToMain()
                 } label: {
                     Image(systemName: "arrow.up.left.and.arrow.down.right")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(AppTheme.textSecondary)
-                        .frame(width: 24, height: 24)
-                        .background(Circle().fill(AppTheme.softCardBg))
+                        .font(.system(size: 11.5, weight: .semibold))
+                        .foregroundStyle(isHoveringExpand ? AppTheme.brandPrimary : AppTheme.textSecondary)
+                        .frame(width: 28, height: 28)
+                        .background(Circle().fill(isHoveringExpand ? AppTheme.brandSoftFill : AppTheme.softCardBg))
+                        .contentShape(Circle())
                 }
                 .buttonStyle(.plain)
-                .help("展开为双栏实时记录大窗")
+                .onHover { isHoveringExpand = $0 }
+                .help(L("展开为双栏实时记录大窗", "Expand to Full Workspace"))
             }
 
-            // Row 2: Live 1-line transcript or AI summary snippet
+            // Row 2: Live 1-line transcript or AI summary snippet (double-click also expands)
             Text(liveSnippet)
                 .font(.system(size: 12))
                 .foregroundStyle(AppTheme.textSecondary)
                 .lineLimit(1)
                 .truncationMode(.tail)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+                .onTapGesture(count: 2) {
+                    appState.expandFromMiniWindowToMain()
+                }
 
             // Row 3: Doubao-style Pause (soft blue) + Stop (soft gray) pills
             HStack(spacing: 8) {
@@ -362,13 +378,14 @@ struct LiveCapsuleView: View {
                     HStack(spacing: 5) {
                         Image(systemName: appState.isPaused ? "play.fill" : "pause.fill")
                             .font(.system(size: 11, weight: .bold))
-                        Text(appState.isPaused ? "继续" : "暂停")
+                        Text(appState.isPaused ? L("继续", "Resume") : L("暂停", "Pause"))
                             .font(.system(size: 11.5, weight: .medium))
                     }
                     .foregroundStyle(AppTheme.brandPrimary)
                     .frame(maxWidth: .infinity)
                     .frame(height: 28)
                     .background(Capsule().fill(AppTheme.brandSoftFill))
+                    .contentShape(Capsule())
                 }
                 .buttonStyle(.plain)
 
@@ -379,13 +396,14 @@ struct LiveCapsuleView: View {
                         RoundedRectangle(cornerRadius: 2)
                             .fill(AppTheme.textPrimary)
                             .frame(width: 8.5, height: 8.5)
-                        Text("结束并总结")
+                        Text(L("结束并总结", "Stop & Summarize"))
                             .font(.system(size: 11.5, weight: .medium))
                             .foregroundStyle(AppTheme.textPrimary)
                     }
                     .frame(maxWidth: .infinity)
                     .frame(height: 28)
                     .background(Capsule().fill(AppTheme.neutralPill))
+                    .contentShape(Capsule())
                 }
                 .buttonStyle(.plain)
             }
@@ -403,7 +421,7 @@ struct LiveCapsuleView: View {
         )
         .shadow(color: .black.opacity(0.15), radius: 16, x: 0, y: 6)
         .tint(AppTheme.brandPrimary)
-        .preferredColorScheme(ThemeManager.shared.preferredColorScheme)
+        .preferredColorScheme(theme.preferredColorScheme)
     }
 
     private var liveSnippet: String {

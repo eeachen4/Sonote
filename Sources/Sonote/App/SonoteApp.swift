@@ -24,28 +24,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         appState.onUpdateCapsuleVisibility = { [weak self] visible in
             self?.capsuleController.setVisible(visible, appState: appState)
         }
-        appState.onOpenMainWindow = {
-            NSApp.activate(ignoringOtherApps: true)
-            for window in NSApp.windows where !(window is FloatingHUDPanel) {
-                if window.canBecomeMain {
-                    window.makeKeyAndOrderFront(nil)
-                    break
-                }
+        appState.onOpenMainWindow = { [weak self] in
+            self?.bringMainWindowToFront()
+        }
+        appState.onHideMainWindow = { [weak self] in
+            if let mainWin = self?.findMainWindow() {
+                mainWin.orderOut(nil)
             }
         }
-        appState.onHideMainWindow = {
-            for window in NSApp.windows where !(window is FloatingHUDPanel) {
-                if window.canBecomeMain {
-                    window.orderOut(nil)
-                }
-            }
-        }
-        appState.onToggleMainWindow = {
-            let mainWin = NSApp.windows.first(where: { !($0 is FloatingHUDPanel) && $0.canBecomeMain })
-            if let mainWin, mainWin.isVisible && NSApp.isActive {
+        appState.onToggleMainWindow = { [weak self] in
+            guard let self else { return }
+            if let mainWin = self.findMainWindow(), mainWin.isVisible && !mainWin.isMiniaturized && NSApp.isActive {
                 mainWin.orderOut(nil)
             } else {
-                appState.onOpenMainWindow?()
+                self.bringMainWindowToFront()
             }
         }
 
@@ -86,9 +78,64 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         if !flag {
-            AppState.shared.onOpenMainWindow?()
+            bringMainWindowToFront()
         }
         return true
+    }
+
+    private func findMainWindow() -> NSWindow? {
+        if let tracked = AppState.shared.trackedMainWindow {
+            return tracked
+        }
+        if let identified = NSApp.windows.first(where: { $0.identifier?.rawValue == "sonote-main-window" }) {
+            AppState.shared.registerMainWindow(identified)
+            return identified
+        }
+        // Fallback heuristic that strictly excludes FloatingHUDPanel, Settings, and MenuBarExtra windows
+        return NSApp.windows.first { win in
+            guard !(win is FloatingHUDPanel), win.canBecomeMain else { return false }
+            let cls = NSStringFromClass(type(of: win))
+            if cls.contains("Settings") || cls.contains("MenuBar") || cls.contains("StatusBar") {
+                return false
+            }
+            return win.title == "Sonote"
+        }
+    }
+
+    private func bringMainWindowToFront() {
+        NSApp.activate(ignoringOtherApps: true)
+        if let mainWin = findMainWindow() {
+            if mainWin.isMiniaturized {
+                mainWin.deminiaturize(nil)
+            }
+            // When expanding from the floating capsule into live 2-column view, ensure comfortable workspace width
+            if AppState.shared.isRecordingOrPaused && mainWin.frame.width < 920 {
+                let screen = mainWin.screen?.visibleFrame ?? NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
+                let targetW = min(1040, max(920, screen.width - 120))
+                let targetH = min(680, max(580, screen.height - 120))
+                let frame = NSRect(
+                    x: screen.midX - targetW / 2,
+                    y: screen.midY - targetH / 2,
+                    width: targetW,
+                    height: targetH
+                )
+                mainWin.setFrame(frame, display: true, animate: true)
+            }
+            mainWin.makeKeyAndOrderFront(nil)
+            mainWin.orderFrontRegardless()
+            if !mainWin.isVisible, let openSwiftUI = AppState.shared.swiftUIOpenMainWindow {
+                openSwiftUI()
+            }
+        } else if let openSwiftUI = AppState.shared.swiftUIOpenMainWindow {
+            openSwiftUI()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) { [weak self] in
+                NSApp.activate(ignoringOtherApps: true)
+                if let win = self?.findMainWindow() {
+                    win.makeKeyAndOrderFront(nil)
+                    win.orderFrontRegardless()
+                }
+            }
+        }
     }
 }
 

@@ -99,7 +99,9 @@ public final class AppState: ObservableObject {
     private var accumulatedPausedSeconds: TimeInterval = 0
     private var pauseStartedAt: Date?
 
-    // Callbacks wired by AppDelegate for NSPanel management
+    // Callbacks wired by AppDelegate / SwiftUI for NSPanel & main NSWindow management
+    public weak var trackedMainWindow: NSWindow?
+    public var swiftUIOpenMainWindow: (() -> Void)?
     public var onShowMeetingPrompt: ((DetectedMeetingApp) -> Void)?
     public var onShowMeetingEndPrompt: ((DetectedMeetingApp) -> Void)?
     public var onHidePromptPanel: (() -> Void)?
@@ -107,6 +109,12 @@ public final class AppState: ObservableObject {
     public var onOpenMainWindow: (() -> Void)?
     public var onHideMainWindow: (() -> Void)?
     public var onToggleMainWindow: (() -> Void)?
+
+    public func registerMainWindow(_ window: NSWindow) {
+        window.identifier = NSUserInterfaceItemIdentifier("sonote-main-window")
+        window.isReleasedWhenClosed = false
+        trackedMainWindow = window
+    }
 
     public init() {
         let loadedSettings = MeetingStore.shared.loadSettings()
@@ -457,11 +465,15 @@ public final class AppState: ObservableObject {
     }
 
     public func expandFromMiniWindowToMain() {
-        setCapsuleVisible(false)
         if let activeID = activeRecordingMeetingID {
             selectedMeetingID = activeID
         }
+        // Open and focus main workspace window first, then tear down the floating HUD on the next tick
+        // so the button's mouseUp inside FloatingHUDPanel finishes cleanly.
         onOpenMainWindow?()
+        DispatchQueue.main.async { [weak self] in
+            self?.setCapsuleVisible(false)
+        }
     }
 
     // MARK: - Timers & Periodic In-Meeting Smart Notes

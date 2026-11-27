@@ -11,6 +11,7 @@ struct MainWindowView: View {
     @ObservedObject var appState: AppState
     @ObservedObject private var theme = ThemeManager.shared
     @Environment(\.openSettings) private var openSettings
+    @Environment(\.openWindow) private var openWindow
 
     @State private var searchText: String = ""
     @State private var selectedTagFilter: String? = nil
@@ -39,6 +40,12 @@ struct MainWindowView: View {
         .frame(minWidth: 740, minHeight: 520)
         .tint(AppTheme.brandPrimary)
         .preferredColorScheme(theme.preferredColorScheme)
+        .background(MainWindowAccessor { window in
+            appState.registerMainWindow(window)
+        })
+        .onAppear {
+            appState.swiftUIOpenMainWindow = { openWindow(id: "main") }
+        }
         .sheet(isPresented: $showPasteSheet) {
             PasteTranscriptSheet(appState: appState, isPresented: $showPasteSheet)
         }
@@ -866,5 +873,38 @@ private struct PasteTranscriptSheet: View {
         .background(AppTheme.canvasWhite)
         .tint(AppTheme.brandPrimary)
         .preferredColorScheme(ThemeManager.shared.preferredColorScheme)
+    }
+}
+
+/// Captures the hosting `NSWindow` for SwiftUI's primary `Window("Sonote", id: "main")`
+/// so floating panels, global hotkeys, and menu bar actions always focus the exact main window
+/// rather than mistakenly matching Settings or MenuBarExtra windows.
+private struct MainWindowAccessor: NSViewRepresentable {
+    let onWindow: (NSWindow) -> Void
+
+    func makeNSView(context: Context) -> NSView {
+        let view = WindowCaptureNSView()
+        view.onWindow = onWindow
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        if let captureView = nsView as? WindowCaptureNSView {
+            captureView.onWindow = onWindow
+            if let window = captureView.window {
+                onWindow(window)
+            }
+        }
+    }
+
+    private final class WindowCaptureNSView: NSView {
+        var onWindow: ((NSWindow) -> Void)?
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            if let window {
+                onWindow?(window)
+            }
+        }
     }
 }
