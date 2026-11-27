@@ -1,4 +1,4 @@
-// swift-tools-version: 6.3
+// swift-tools-version: 6.0
 import PackageDescription
 
 let package = Package(
@@ -12,7 +12,7 @@ let package = Package(
         .executable(name: "Sonote", targets: ["Sonote"])
     ],
     dependencies: [
-        .package(url: "https://github.com/Blaizzy/mlx-audio-swift.git", branch: "main"),
+        .package(url: "https://github.com/Blaizzy/mlx-audio-swift.git", revision: "c7755e2504181a771941bb6f9f26ea79b3cdfce3"),
         .package(url: "https://github.com/ml-explore/mlx-swift.git", .upToNextMajor(from: "0.33.0")),
         .package(url: "https://github.com/huggingface/swift-huggingface.git", .upToNextMajor(from: "1.0.1")),
         .package(url: "https://github.com/huggingface/swift-transformers.git", .upToNextMajor(from: "1.4.0"))

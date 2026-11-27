@@ -860,6 +860,18 @@ final class SonoteTests: XCTestCase {
         XCTAssertEqual(parsedFromThink.overview, "完成 DeepSeek 与通义千问接入")
         XCTAssertEqual(parsedFromThink.decisions, ["默认启用流式输出"])
         XCTAssertNil(parsedFromThink.rawMarkdownFallback)
+
+        // 7. Semantic Version Comparison & GitHub Release Update Checker Parsing
+        XCTAssertEqual(UpdateCheckerService.compareSemanticVersions("1.5.0", "1.5.1"), .orderedAscending)
+        XCTAssertEqual(UpdateCheckerService.compareSemanticVersions("v1.5.1", "1.5.1"), .orderedSame)
+        XCTAssertEqual(UpdateCheckerService.compareSemanticVersions("1.6.0", "1.5.9"), .orderedDescending)
+
+        let ghReleaseJSON = #"{"tag_name":"v1.6.0","html_url":"https://github.com/eeachen4/Sonote/releases/tag/v1.6.0","body":"New release"}"#
+        let updateCheck = UpdateCheckerService.parseGitHubReleaseJSON(Data(ghReleaseJSON.utf8), currentVersion: "1.5.1")
+        XCTAssertEqual(updateCheck?.latestVersion, "1.6.0")
+        XCTAssertEqual(updateCheck?.hasUpdate, true)
+        let upToDateCheck = UpdateCheckerService.parseGitHubReleaseJSON(Data(ghReleaseJSON.utf8), currentVersion: "1.6.0")
+        XCTAssertEqual(upToDateCheck?.hasUpdate, false)
     }
 
     // MARK: - Opt-in Live Hardware Verification for DeepFilterNet3, ECAPA-TDNN & Sortformer (SONOTE_LIVE_V15=1)

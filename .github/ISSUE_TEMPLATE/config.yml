@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Discussions / 交流与问答
+    url: https://github.com/eeachen4/Sonote/discussions
+    about: Ask usage questions or share custom prompt templates / 使用交流与自定义模板分享

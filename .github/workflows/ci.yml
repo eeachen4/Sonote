@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: Build & Test (macOS 15 Apple Silicon)
+    runs-on: macos-15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Select latest Xcode
+        run: |
+          XCODE_APP=$(ls -d /Applications/Xcode*.app | sort -V | tail -n 1)
+          echo "Using $XCODE_APP"
+          sudo xcode-select -s "$XCODE_APP/Contents/Developer"
+          xcodebuild -version
+          swift --version
+
+      - name: Cache SwiftPM & DerivedData
+        uses: actions/cache@v4
+        with:
+          path: |
+            .build/xcode-ci/SourcePackages
+          key: spm-${{ runner.os }}-${{ hashFiles('Package.resolved') }}
+          restore-keys: |
+            spm-${{ runner.os }}-
+
+      - name: Ensure Metal Toolchain (for mlx-swift shaders)
+        run: |
+          if ! xcrun --find metal >/dev/null 2>&1; then
+            xcodebuild -downloadComponent MetalToolchain || true
+          fi
+
+      - name: Run Offline Unit Tests
+        run: |
+          xcodebuild test \
+            -scheme Sonote-Package \
+            -destination 'platform=macOS,arch=arm64' \
+            -configuration Release \
+            -derivedDataPath .build/xcode-ci

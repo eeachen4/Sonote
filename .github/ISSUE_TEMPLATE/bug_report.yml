@@ -1,0 +1,66 @@
+name: Bug Report / 问题反馈
+description: Report a bug or crash in Sonote / 报告 Sonote 的异常或崩溃
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: 问题描述 / What happened?
+      description: 简明描述你遇到的问题以及预期行为。
+      placeholder: 例如：点击悬浮小窗的展开按钮后，主窗口未弹出...
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤 / Steps to reproduce
+      placeholder: |
+        1. 打开 Sonote 并开始录制
+        2. 切换到...
+        3. 点击...
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Sonote 版本 / App Version
+      placeholder: "v1.5.1"
+    validations:
+      required: true
+
+  - type: input
+    id: macos
+    attributes:
+      label: macOS 版本与芯片 / macOS & Hardware
+      placeholder: "macOS 15.4 · Apple M4 Pro · 24 GB"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: engines
+    attributes:
+      label: 正在使用的转写 / AI 引擎 / Active ASR & LLM Engine
+      multiple: true
+      options:
+        - MLX Qwen3-ASR (Local)
+        - Apple Speech
+        - OpenAI Transcribe
+        - DeepSeek
+        - 通义千问 Qwen (DashScope)
+        - 更多国产 (Kimi / GLM / 豆包 / 硅基流动 / MiniMax / 混元)
+        - 内置离线 MLX LLM (Qwen2.5)
+        - Codex Auth
+        - OpenAI / Ollama / MLX Server
+        - Anthropic Claude
+        - Google Gemini
+    validations:
+      required: false
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: 截图或日志 / Screenshots or Logs
+      description: 请勿粘贴个人 API Key 或敏感会议内容。

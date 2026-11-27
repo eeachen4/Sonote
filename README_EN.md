@@ -1,14 +1,20 @@
-# Sonote (声记)
+<p align="center">
+  <img src="./docs/assets/banner.svg" alt="Sonote — Native macOS AI Meeting Minutes powered by Apple Silicon MLX" width="100%" />
+</p>
+
+<h1 align="center">Sonote (声记)</h1>
 
 <p align="center">
   <strong>Native macOS AI Meeting Minutes powered 100% on-device by Apple Silicon MLX</strong>
 </p>
 
 <p align="center">
-  <strong>English</strong> · <a href="./README.md">简体中文</a>
+  <strong>English</strong> · <a href="./README.md">简体中文</a> · <a href="./CHANGELOG.md">Changelog</a> · <a href="./CONTRIBUTING.md">Contributing</a> · <a href="./SECURITY.md">Security</a>
 </p>
 
 <p align="center">
+  <a href="https://github.com/eeachen4/Sonote/actions/workflows/ci.yml"><img src="https://github.com/eeachen4/Sonote/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
+  <a href="https://github.com/eeachen4/Sonote/releases"><img src="https://img.shields.io/github/v/release/eeachen4/Sonote?color=216EF7" alt="Release" /></a>
   <img src="https://img.shields.io/badge/macOS-15.0%2B-000000?logo=apple" alt="macOS 15+" />
   <img src="https://img.shields.io/badge/Apple%20Silicon-MLX-2468F2" alt="Apple Silicon MLX" />
   <img src="https://img.shields.io/badge/Swift-SwiftUI-F05138?logo=swift&logoColor=white" alt="SwiftUI" />
@@ -17,46 +23,83 @@
 
 **Sonote** is a native SwiftUI meeting minutes app built for Apple Silicon Macs — no Electron, no virtual audio drivers (no BlackHole), and no external Python/Ollama server required.
 
-Behind a calm, minimalist light UI, Sonote runs an end-to-end on-device **MLX** audio & intelligence pipeline: **CoreAudio system audio + mic dual capture**, **DeepFilterNet3 neural speech denoising**, **streaming Silero VAD**, **Qwen3-ASR bilingual transcription**, **Sortformer & ECAPA-TDNN cross-meeting voiceprint recognition**, and a **built-in quantized Qwen2.5 MLX LLM** alongside cloud providers (OpenAI, Claude, Gemini, Ollama, Codex).
+Behind an adaptive Light/Dark minimalist UI with 6 customizable accent themes and live EN/ZH switching, Sonote runs an end-to-end on-device **MLX** audio & intelligence pipeline: **CoreAudio system audio + mic dual capture**, **DeepFilterNet3 neural denoising**, **streaming Silero VAD**, **Qwen3-ASR bilingual transcription**, **Sortformer & ECAPA-TDNN cross-meeting voiceprint recognition**, and a **built-in quantized Qwen2.5 MLX LLM** alongside cloud providers (**DeepSeek, Alibaba Qwen, Kimi, Zhipu GLM, Doubao, SiliconFlow, OpenAI, Claude, Gemini, Ollama, Codex**).
+
+---
+
+## Download & Install
+
+### Option 1: Prebuilt DMG (Recommended)
+Download the latest `Sonote-*-arm64.dmg` from [GitHub Releases](https://github.com/eeachen4/Sonote/releases) and drag **Sonote.app** to `/Applications`.
+
+> **First-launch Gatekeeper note:** Open-source builds are currently self-signed (not notarized with a paid Apple Developer ID). If macOS reports the app cannot be opened, run once after copying to `/Applications`:
+> ```bash
+> xattr -cr /Applications/Sonote.app
+> ```
+
+### Option 2: Homebrew Cask
+```bash
+brew install --cask ./Casks/sonote.rb
+```
+
+---
+
+## On-Device Pipeline Architecture
+
+```mermaid
+flowchart LR
+    A["CoreAudio Process Tap\n(Remote Call Audio)"] --> C["DualAudioCaptureManager\nDual-track + Hot-swap + .m4a Mix"]
+    B["AVAudioEngine\n(Local Microphone)"] --> C
+    C --> D["DeepFilterNet3 v3\nMLX Neural Denoiser"]
+    D --> E["Silero Streaming VAD\n32ms LSTM Endpointing"]
+    E --> F["MLX Qwen3-ASR\nBilingual STT + Hotwords"]
+    E --> G["Sortformer / ECAPA-TDNN\n192-dim Offline Voiceprint ID"]
+    F --> H["Minutes & Q&A Engine\nBuilt-in MLX / DeepSeek / Qwen / GPT / Claude / Gemini"]
+    G --> H
+    H --> I["Feishu / DingTalk / Notion Webhook\nApple Reminders · PDF · Markdown · Mermaid"]
+```
 
 ---
 
 ## Highlights
 
-- **Zero-Friction Meeting Detection & Calendar Sync**: Detects active calls across Zoom, Teams, Feishu, DingTalk, Tencent Meeting, WeCom, Slack, Discord, Webex, FaceTime, and browser meetings via CoreAudio (no Accessibility or full Screen Recording permission needed). Automatically pulls meeting titles & attendee names from macOS Calendar (EventKit).
-- **Dual-Track Audio Capture & Synced Playback**: Captures system audio via macOS 15 `CoreAudio Process Tap` + microphone via `AVAudioEngine`, handles AirPods/headset hot-swapping automatically, saves lightweight `.m4a` recordings, and supports variable-speed playback (`1x`–`2x`) synced to transcript timestamps.
+- **Zero-Friction Meeting Detection & Calendar Sync**: Detects active calls across Zoom, Teams, Feishu, DingTalk, Tencent Meeting, WeCom, Slack, Discord, Webex, FaceTime, and browser calls via CoreAudio (no Accessibility or full Screen Recording permission needed). Pulls meeting titles & attendee names from macOS Calendar (EventKit).
+- **Dual-Track Capture & Synced Playback**: Captures system audio via macOS 15 `CoreAudio Process Tap` + microphone via `AVAudioEngine`, handles AirPods/headset hot-swapping, saves lightweight `.m4a` audio, and supports variable-speed playback (`1x`–`2x`) synced to transcript timestamps.
 - **Full On-Device Apple Silicon MLX Audio Stack**:
-  - **Qwen3-ASR (`mlx-audio-swift`)**: High-accuracy bilingual Chinese/English transcription with team glossary & calendar attendee hotwords; automatically unloads GPU memory after meetings.
+  - **Qwen3-ASR (`mlx-audio-swift`)**: High-accuracy bilingual Chinese/English transcription with team glossary & calendar hotwords; auto-unloads GPU memory after meetings.
   - **Streaming Silero VAD**: 512-sample (32 ms) frame-by-frame LSTM endpointing.
   - **DeepFilterNet3 v3 Denoiser**: Neural speech enhancement (~59x real-time on M4 Pro) for noisy offices and cafés.
-  - **Local ECAPA-TDNN Voiceprint Library & Diarization**: 192-dim speaker embeddings persisted 100% offline. Supports **Sortformer** (≤4 speakers) and **ECAPA online clustering** (5–12+ speakers) to automatically identify real names across meetings.
-- **Built-In Offline MLX LLM + Multi-Provider Cloud AI (Global & Chinese LLMs)**:
+  - **Local ECAPA-TDNN Voiceprint Library & Diarization**: 192-dim speaker embeddings persisted 100% offline. Supports **Sortformer** (≤4 speakers) and **ECAPA online clustering** (5–12+ speakers) to identify real names across meetings.
+- **Built-In Offline MLX LLM + Global & Chinese Cloud LLMs**:
   - Run quantized `Qwen2.5-Instruct` (`1.5B` / `3B` / `7B` 4-bit) directly inside the app via Metal GPU with zero external servers or token fees.
-  - First-class support for **DeepSeek** (`deepseek-chat` / `deepseek-reasoner` with cache-hit & `<think>` handling), **Alibaba Qwen / DashScope** (`qwen-plus` / `qwen-max` / `qwen3-max` / `qwen-long`), and one-click presets for **Kimi (Moonshot)**, **Zhipu GLM**, **Doubao (Volcengine Ark)**, **SiliconFlow**, **MiniMax**, and **Tencent Hunyuan**.
-  - Also supports **OpenAI / Ollama / MLX Server**, **Anthropic Claude**, **Google Gemini**, and local **Codex Auth** — all API keys stored in macOS Keychain.
-- **Minimalist Productivity & Team Workflows**:
-  - Compact floating recording capsule (`316×108`), collapsible live manual notes, custom summary prompt templates, meeting tags, global action-item tracker synced to **Apple Reminders**, and **Cross-Meeting AI Q&A**.
-  - One-click **Feishu / DingTalk / Custom JSON (Notion, n8n) Webhook** push with official HMAC-SHA256 signing, rich-text HTML/RTF copy, paginated A4 PDF export, Mermaid mind maps, and portable `.zip` full-library backup & merge restore (API keys stripped).
+  - First-class support for **DeepSeek** (`deepseek-chat` / `deepseek-reasoner` with `prompt_cache_hit_tokens` & `<think>` handling), **Alibaba Qwen / DashScope** (Beijing & Singapore endpoints, `qwen-plus` / `qwen-max` / `qwen3-max` / `qwen-long`), and one-click presets for **Kimi**, **Zhipu GLM**, **Doubao Ark**, **SiliconFlow**, **MiniMax**, and **Tencent Hunyuan**.
+  - Also supports **OpenAI / Ollama / MLX Server**, **Anthropic Claude**, **Google Gemini**, and local **Codex Auth** — all secrets stored in macOS Keychain.
+- **Minimalist Craft, Adaptive Theme & Team Workflows**:
+  - Live **Light / Dark / Auto** appearance, **6 accent colors**, live **English / 简体中文** interface toggle, reading font scale, and built-in GitHub release update checker.
+  - Compact floating recording capsule (`316×108`) with first-click expand, collapsible live manual notes, custom templates, tags, **Apple Reminders** sync, **Cross-Meeting AI Q&A**, **Feishu / DingTalk / Custom JSON Webhooks** (HMAC-SHA256 signed), paginated A4 PDF export, and `.zip` full-library backup & merge restore.
 
 ---
 
-## Requirements
+## Apple Silicon RAM & Model Guide
 
-- **macOS 15.0 (Sequoia)** or later
-- **Apple Silicon Mac** (M1 / M2 / M3 / M4, 16 GB+ unified memory recommended for local MLX models)
-- **Xcode 16+** with `MetalToolchain` installed
+| Unified Memory | Recommended Local ASR | Recommended Summary LLM | Peak Model Footprint |
+| :--- | :--- | :--- | :--- |
+| **8 GB** | `Qwen3-ASR-0.6B-4bit` (~0.6 GB) or Apple Speech | Cloud API (DeepSeek / Qwen / GPT) or built-in `Qwen2.5-1.5B-4bit` | ~1.5 – 2.5 GB |
+| **16 GB (Recommended)** | `Qwen3-ASR-1.7B-4bit` (~1.4 GB) or `1.7B-8bit` (~2.3 GB) | Cloud API or built-in `Qwen2.5-3B-4bit` (~2.1 GB) | ~3.5 – 5.0 GB |
+| **24 GB / 32 GB+** | `Qwen3-ASR-1.7B-8bit` + `DeepFilterNet3` + `ECAPA-TDNN` | Built-in `Qwen2.5-7B-4bit` (~4.5 GB) or any flagship cloud model | ~6.0 – 8.0 GB |
+
+> With **Auto-Unload MLX Weights After Meeting** enabled, idle background memory stays around **50–90 MB**.
 
 ---
 
-## Build, Test & Install
+## Build from Source
 
-> Because Sonote compiles `mlx-swift` Metal GPU shaders, build using `xcodebuild` (via the included scripts) rather than plain `swift build`.
+- **Requirements**: macOS 15.0+ · Apple Silicon (`arm64`) · Xcode 16+ with `MetalToolchain`
 
 ```bash
 git clone https://github.com/eeachen4/Sonote.git
 cd Sonote
 
-# Install Metal Toolchain once if prompted on first build
 xcodebuild -downloadComponent MetalToolchain
 
 # Run offline unit tests
@@ -65,27 +108,18 @@ xcodebuild test \
   -destination 'platform=macOS,arch=arm64' \
   -configuration Release
 
-# Build signed native app bundle (dist/Sonote.app)
+# Build signed native app bundle & package DMG
 chmod +x scripts/build_app.sh scripts/install_app.sh scripts/package_dmg.sh
 ./scripts/build_app.sh
-
-# Install to /Applications/Sonote.app and launch
 ./scripts/install_app.sh
-
-# Package distributable .dmg (dist/Sonote-1.5.0-arm64.dmg)
 ./scripts/package_dmg.sh
 ```
 
----
-
-## Privacy First
-
-- All transcripts, minutes, `.m4a` audio backups, and 192-dim voiceprint profiles stay locally in `~/Library/Application Support/Sonote/`.
-- All API keys and Webhook signing secrets are stored strictly in macOS Keychain (`com.sonote.app`) and excluded from exported `.zip` backups.
-- With **MLX Qwen3-ASR + Built-in Local MLX LLM**, the entire meeting pipeline runs **100% offline on your Mac**.
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for opt-in live hardware tests and PR guidelines.
 
 ---
 
-## License
+## Privacy & License
 
-Released under the [MIT License](./LICENSE).
+- All local data stays in `~/Library/Application Support/Sonote/`; secrets stay in macOS Keychain (`com.sonote.app`). See [SECURITY.md](./SECURITY.md).
+- Released under the [MIT License](./LICENSE).
