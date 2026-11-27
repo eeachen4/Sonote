@@ -186,8 +186,9 @@ struct GlobalActionItemsSheet: View {
         }
         .padding(22)
         .frame(width: 620, height: 480)
-        .background(Color.white)
-        .preferredColorScheme(.light)
+        .background(AppTheme.canvasWhite)
+        .tint(AppTheme.brandPrimary)
+        .preferredColorScheme(ThemeManager.shared.preferredColorScheme)
     }
 
     private func ownerChip(_ title: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
@@ -440,15 +441,16 @@ struct CrossMeetingAskAISheet: View {
                     }
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
-                    .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.white))
+                    .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(AppTheme.elevatedSurface))
                     .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(AppTheme.subtleBorder, lineWidth: 1))
                 }
             }
         }
         .padding(22)
         .frame(width: 780, height: 540)
-        .background(Color.white)
-        .preferredColorScheme(.light)
+        .background(AppTheme.canvasWhite)
+        .tint(AppTheme.brandPrimary)
+        .preferredColorScheme(ThemeManager.shared.preferredColorScheme)
         .onAppear {
             if selectedIDs.isEmpty {
                 selectedIDs = Set(appState.meetings.prefix(3).map(\.id))

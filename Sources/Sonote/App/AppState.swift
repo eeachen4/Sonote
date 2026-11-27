@@ -22,6 +22,7 @@ public final class AppState: ObservableObject {
 
     @Published public var settings: AppSettings {
         didSet {
+            ThemeManager.shared.sync(with: settings)
             store.saveSettings(settings)
             refreshAuthInspection()
             detector.configure(settings: settings) { [weak self] in
@@ -109,6 +110,7 @@ public final class AppState: ObservableObject {
 
     public init() {
         let loadedSettings = MeetingStore.shared.loadSettings()
+        ThemeManager.shared.sync(with: loadedSettings)
         self.settings = loadedSettings
         self.authInspection = AuthManager.shared.inspect(settings: loadedSettings)
         let loadedMeetings = MeetingStore.shared.loadMeetings()
@@ -143,7 +145,7 @@ public final class AppState: ObservableObject {
     }
 
     public var menuBarTimerLabel: String? {
-        guard let meeting = activeRecordingMeeting else { return nil }
+        guard settings.showMenuBarTimer, let meeting = activeRecordingMeeting else { return nil }
         return meeting.formattedDuration
     }
 

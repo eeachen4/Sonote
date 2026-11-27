@@ -1,5 +1,137 @@
 import Foundation
 
+public enum AppInterfaceLanguage: String, Codable, CaseIterable, Identifiable, Sendable {
+    case system = "system"
+    case zhHans = "zh-Hans"
+    case en = "en"
+
+    public var id: String { rawValue }
+
+    public var displayName: String {
+        switch self {
+        case .system: return "跟随系统 / System"
+        case .zhHans: return "简体中文"
+        case .en: return "English"
+        }
+    }
+
+    public func localizedName(isEnglish: Bool) -> String {
+        switch self {
+        case .system: return isEnglish ? "Follow System" : "跟随系统"
+        case .zhHans: return "简体中文"
+        case .en: return "English"
+        }
+    }
+
+    public var resolvedIsEnglish: Bool {
+        switch self {
+        case .zhHans:
+            return false
+        case .en:
+            return true
+        case .system:
+            let preferred = Locale.preferredLanguages.first?.lowercased() ?? "zh"
+            return !preferred.hasPrefix("zh")
+        }
+    }
+}
+
+public enum AppAppearanceMode: String, Codable, CaseIterable, Identifiable, Sendable {
+    case system = "system"
+    case light = "light"
+    case dark = "dark"
+
+    public var id: String { rawValue }
+
+    public func localizedName(isEnglish: Bool) -> String {
+        switch self {
+        case .system: return isEnglish ? "Auto" : "跟随系统"
+        case .light: return isEnglish ? "Light" : "浅色"
+        case .dark: return isEnglish ? "Dark" : "深色"
+        }
+    }
+}
+
+public struct AccentRGB: Equatable, Sendable {
+    public let r: Double
+    public let g: Double
+    public let b: Double
+
+    public init(_ r: Double, _ g: Double, _ b: Double) {
+        self.r = r
+        self.g = g
+        self.b = b
+    }
+}
+
+public enum AppAccentTheme: String, Codable, CaseIterable, Identifiable, Sendable {
+    case cobaltBlue = "cobaltBlue"
+    case indigoViolet = "indigoViolet"
+    case emeraldGreen = "emeraldGreen"
+    case amberGold = "amberGold"
+    case roseCoral = "roseCoral"
+    case graphiteSlate = "graphiteSlate"
+
+    public var id: String { rawValue }
+
+    public func localizedName(isEnglish: Bool) -> String {
+        switch self {
+        case .cobaltBlue: return isEnglish ? "Cobalt" : "晴空蓝"
+        case .indigoViolet: return isEnglish ? "Indigo" : "星云紫"
+        case .emeraldGreen: return isEnglish ? "Emerald" : "青竹绿"
+        case .amberGold: return isEnglish ? "Amber" : "琥珀橙"
+        case .roseCoral: return isEnglish ? "Rose" : "绯樱粉"
+        case .graphiteSlate: return isEnglish ? "Graphite" : "石墨灰"
+        }
+    }
+
+    public var lightRGB: AccentRGB {
+        switch self {
+        case .cobaltBlue: return AccentRGB(0.13, 0.43, 0.97)     // #216EF7
+        case .indigoViolet: return AccentRGB(0.39, 0.36, 0.98)   // #635BFF
+        case .emeraldGreen: return AccentRGB(0.06, 0.64, 0.48)   // #10A37A
+        case .amberGold: return AccentRGB(0.88, 0.49, 0.11)      // #E07D1C
+        case .roseCoral: return AccentRGB(0.89, 0.27, 0.41)      // #E34568
+        case .graphiteSlate: return AccentRGB(0.31, 0.35, 0.42)  // #4F596B
+        }
+    }
+
+    public var darkRGB: AccentRGB {
+        switch self {
+        case .cobaltBlue: return AccentRGB(0.33, 0.58, 1.00)     // #5494FF
+        case .indigoViolet: return AccentRGB(0.55, 0.52, 1.00)   // #8C85FF
+        case .emeraldGreen: return AccentRGB(0.18, 0.78, 0.60)   // #2EC799
+        case .amberGold: return AccentRGB(0.96, 0.62, 0.25)      // #F59E40
+        case .roseCoral: return AccentRGB(0.96, 0.42, 0.55)      // #F56B8C
+        case .graphiteSlate: return AccentRGB(0.62, 0.67, 0.76)  // #9EABC2
+        }
+    }
+}
+
+public enum AppFontScale: String, Codable, CaseIterable, Identifiable, Sendable {
+    case compact = "compact"
+    case standard = "standard"
+    case comfortable = "comfortable"
+
+    public var id: String { rawValue }
+
+    public var multiplier: Double {
+        switch self {
+        case .compact: return 0.92
+        case .standard: return 1.0
+        case .comfortable: return 1.12
+        }
+    }
+
+    public func localizedName(isEnglish: Bool) -> String {
+        switch self {
+        case .compact: return isEnglish ? "Compact" : "紧凑"
+        case .standard: return isEnglish ? "Standard" : "标准"
+        case .comfortable: return isEnglish ? "Large" : "舒适"
+        }
+    }
+}
+
 public enum AuthMode: String, Codable, CaseIterable, Identifiable, Sendable {
     case localAuthFile = "localAuthFile"
     case apiKey = "apiKey"
@@ -253,6 +385,14 @@ public enum GlobalHotKeyModifierPreset: String, Codable, CaseIterable, Identifia
 }
 
 public struct AppSettings: Codable, Equatable, Sendable {
+    // General (Interface Language, Appearance, Accent Theme, Font Scale & Window Behavior)
+    public var interfaceLanguage: AppInterfaceLanguage = .system
+    public var appearanceMode: AppAppearanceMode = .light
+    public var accentTheme: AppAccentTheme = .cobaltBlue
+    public var fontScale: AppFontScale = .standard
+    public var showMenuBarTimer: Bool = true
+    public var keepRunningInMenuBarOnClose: Bool = true
+
     // AI & Auth (Multi-Provider: Codex Auth, OpenAI/Ollama/MLX, Claude, Gemini)
     public var authMode: AuthMode = .localAuthFile
     public var authFilePath: String = "~/.codex/auth.json"
@@ -328,6 +468,13 @@ public struct AppSettings: Codable, Equatable, Sendable {
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         let d = AppSettings()
+        interfaceLanguage = try c.decodeIfPresent(AppInterfaceLanguage.self, forKey: .interfaceLanguage) ?? d.interfaceLanguage
+        appearanceMode = try c.decodeIfPresent(AppAppearanceMode.self, forKey: .appearanceMode) ?? d.appearanceMode
+        accentTheme = try c.decodeIfPresent(AppAccentTheme.self, forKey: .accentTheme) ?? d.accentTheme
+        fontScale = try c.decodeIfPresent(AppFontScale.self, forKey: .fontScale) ?? d.fontScale
+        showMenuBarTimer = try c.decodeIfPresent(Bool.self, forKey: .showMenuBarTimer) ?? d.showMenuBarTimer
+        keepRunningInMenuBarOnClose = try c.decodeIfPresent(Bool.self, forKey: .keepRunningInMenuBarOnClose) ?? d.keepRunningInMenuBarOnClose
+
         authMode = try c.decodeIfPresent(AuthMode.self, forKey: .authMode) ?? d.authMode
         authFilePath = try c.decodeIfPresent(String.self, forKey: .authFilePath) ?? d.authFilePath
         apiKey = try c.decodeIfPresent(String.self, forKey: .apiKey) ?? d.apiKey

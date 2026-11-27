@@ -3,18 +3,21 @@ import SonoteCore
 
 struct MenuBarView: View {
     @ObservedObject var appState: AppState
+    @ObservedObject private var theme = ThemeManager.shared
     @Environment(\.openWindow) private var openWindow
     @Environment(\.openSettings) private var openSettings
 
     private var statusBadgeText: String {
-        guard appState.authInspection.isValid else { return "待配置" }
+        guard appState.authInspection.isValid else { return L("待配置", "Setup Required") }
         switch appState.settings.authMode {
-        case .localAuthFile: return "Codex 已就绪"
+        case .localAuthFile: return L("Codex 已就绪", "Codex Ready")
         case .apiKey:
-            return AuthManager.isLocalhostEndpoint(appState.settings.apiBaseURL) ? "本地服务就绪" : "OpenAI 已就绪"
-        case .anthropicClaude: return "Claude 已就绪"
-        case .googleGemini: return "Gemini 已就绪"
-        case .localMLX: return "离线 MLX 就绪"
+            return AuthManager.isLocalhostEndpoint(appState.settings.apiBaseURL)
+                ? L("本地服务就绪", "Local Ready")
+                : L("OpenAI 已就绪", "OpenAI Ready")
+        case .anthropicClaude: return L("Claude 已就绪", "Claude Ready")
+        case .googleGemini: return L("Gemini 已就绪", "Gemini Ready")
+        case .localMLX: return L("离线 MLX 就绪", "Offline MLX")
         }
     }
 
@@ -88,7 +91,7 @@ struct MenuBarView: View {
                     HStack {
                         Image(systemName: "mic.fill")
                             .font(.system(size: 12))
-                        Text("开始新录音")
+                        Text(L("开始新录音", "Start Recording"))
                         Spacer()
                         Text(recordShortcutLabel)
                             .font(.system(size: 10.5, design: .monospaced))
@@ -108,13 +111,16 @@ struct MenuBarView: View {
             if appState.openActionItemsCount > 0 || !appState.todayTokenUsage.isEmpty {
                 HStack(spacing: 8) {
                     if appState.openActionItemsCount > 0 {
-                        Label("待办 \(appState.openActionItemsCount)", systemImage: "checklist")
+                        Label(
+                            theme.isEnglish ? "Todos \(appState.openActionItemsCount)" : "待办 \(appState.openActionItemsCount)",
+                            systemImage: "checklist"
+                        )
                             .font(.system(size: 11))
                             .foregroundStyle(AppTheme.brandPrimary)
                     }
                     Spacer()
                     if !appState.todayTokenUsage.isEmpty {
-                        Text("今日 \(appState.todayTokenUsage.formattedCompact)t")
+                        Text(theme.isEnglish ? "Today \(appState.todayTokenUsage.formattedCompact)t" : "今日 \(appState.todayTokenUsage.formattedCompact)t")
                             .font(.system(size: 11, design: .monospaced))
                             .foregroundStyle(AppTheme.textMuted)
                     }
@@ -127,7 +133,7 @@ struct MenuBarView: View {
             Divider().overlay(AppTheme.divider)
 
             VStack(spacing: 2) {
-                menuRow(title: "打开主窗口", icon: "macwindow") {
+                menuRow(title: L("打开主窗口", "Open Sonote"), icon: "macwindow") {
                     if appState.isRecordingOrPaused {
                         appState.expandFromMiniWindowToMain()
                     } else {
@@ -135,7 +141,7 @@ struct MenuBarView: View {
                     }
                 }
                 if appState.isRecordingOrPaused {
-                    menuRow(title: appState.isCapsuleVisible ? "展开为双栏大窗" : "收起为左上角小窗", icon: "pip") {
+                    menuRow(title: appState.isCapsuleVisible ? L("展开为双栏大窗", "Expand Workspace") : L("收起为左上角小窗", "Minimize to Capsule"), icon: "pip") {
                         if appState.isCapsuleVisible {
                             appState.expandFromMiniWindowToMain()
                         } else {
@@ -143,10 +149,10 @@ struct MenuBarView: View {
                         }
                     }
                 }
-                menuRow(title: "模拟加入会议提醒", icon: "bell") {
+                menuRow(title: L("模拟加入会议提醒", "Simulate Meeting Prompt"), icon: "bell") {
                     appState.triggerSimulatedMeetingPrompt()
                 }
-                menuRow(title: "偏好设置...", icon: "gearshape") {
+                menuRow(title: L("偏好设置...", "Settings..."), icon: "gearshape") {
                     NSApp.activate(ignoringOtherApps: true)
                     openSettings()
                 }
@@ -155,11 +161,11 @@ struct MenuBarView: View {
             Divider().overlay(AppTheme.divider)
 
             HStack {
-                Text(appState.settings.autoDetectMeetings ? "自动检测会议中" : "自动检测已关闭")
+                Text(appState.settings.autoDetectMeetings ? L("自动检测会议中", "Auto-detecting meetings") : L("自动检测已关闭", "Auto-detect off"))
                     .font(.system(size: 11))
                     .foregroundStyle(AppTheme.textSecondary)
                 Spacer()
-                Button("退出") { NSApp.terminate(nil) }
+                Button(L("退出", "Quit")) { NSApp.terminate(nil) }
                     .buttonStyle(.plain)
                     .font(.system(size: 11.5))
                     .foregroundStyle(AppTheme.textSecondary)
@@ -167,8 +173,9 @@ struct MenuBarView: View {
         }
         .padding(12)
         .frame(width: 256)
-        .background(Color.white)
-        .preferredColorScheme(.light)
+        .background(AppTheme.elevatedSurface)
+        .tint(AppTheme.brandPrimary)
+        .preferredColorScheme(theme.preferredColorScheme)
     }
 
     private func openMainWorkspace() {

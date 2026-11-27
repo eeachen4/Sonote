@@ -51,6 +51,7 @@ struct MeetingWorkspaceView: View {
 struct CompletedMeetingDocumentView: View {
     let meeting: MeetingSession
     @ObservedObject var appState: AppState
+    @ObservedObject private var theme = ThemeManager.shared
     let onBackHome: () -> Void
     let onCloseWindow: () -> Void
 
@@ -60,6 +61,16 @@ struct CompletedMeetingDocumentView: View {
         case transcript = "逐字稿"
         case askAI = "问 AI"
         var id: String { rawValue }
+
+        @MainActor
+        var localizedTitle: String {
+            switch self {
+            case .summary: return L("总结", "Summary")
+            case .mindMap: return L("导图", "Mind Map")
+            case .transcript: return L("逐字稿", "Transcript")
+            case .askAI: return L("问 AI", "Ask AI")
+            }
+        }
     }
 
     @StateObject private var audioPlayer = MeetingAudioPlayer()
@@ -221,7 +232,8 @@ struct CompletedMeetingDocumentView: View {
                                     }
                                     .padding(12)
                                     .frame(width: 240)
-                                    .preferredColorScheme(.light)
+                                    .background(AppTheme.elevatedSurface)
+                                    .preferredColorScheme(ThemeManager.shared.preferredColorScheme)
                                 }
                             }
                             .padding(.top, 6)
@@ -256,7 +268,7 @@ struct CompletedMeetingDocumentView: View {
                                             }
                                         } label: {
                                             VStack(spacing: 7) {
-                                                Text(tab.rawValue)
+                                                Text(tab.localizedTitle)
                                                     .font(.system(size: 13.5, weight: activeTab == tab ? .semibold : .regular))
                                                     .foregroundStyle(activeTab == tab ? AppTheme.textPrimary : AppTheme.textSecondary)
                                                     .padding(.top, 6)
@@ -436,7 +448,7 @@ struct CompletedMeetingDocumentView: View {
                         HStack(spacing: 6) {
                             Image(systemName: "xmark")
                                 .font(.system(size: 11, weight: .medium))
-                            Text("关闭窗口")
+                            Text(L("关闭窗口", "Close"))
                                 .font(.system(size: 12.5, weight: .regular))
                         }
                         .foregroundStyle(AppTheme.textPrimary.opacity(0.85))
@@ -444,7 +456,7 @@ struct CompletedMeetingDocumentView: View {
                         .padding(.vertical, 7)
                         .background(
                             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                .fill(Color.white.opacity(0.9))
+                                .fill(AppTheme.elevatedSurface.opacity(0.92))
                         )
                         .overlay(
                             RoundedRectangle(cornerRadius: 8, style: .continuous)
@@ -489,7 +501,7 @@ struct CompletedMeetingDocumentView: View {
                             }
                         } label: {
                             HStack(spacing: 4) {
-                                Text(copiedToast ?? "导出 / 复制")
+                                Text(copiedToast ?? L("导出 / 复制", "Export"))
                                     .font(.system(size: 12))
                                 Image(systemName: "chevron.down")
                                     .font(.system(size: 9))
@@ -507,7 +519,7 @@ struct CompletedMeetingDocumentView: View {
                         HStack(spacing: 4) {
                             Image(systemName: "chevron.left")
                                 .font(.system(size: 10.5, weight: .semibold))
-                            Text("返回主页")
+                            Text(L("返回主页", "Home"))
                         }
                         .font(.system(size: 12))
                         .foregroundStyle(AppTheme.textSecondary)
@@ -520,7 +532,7 @@ struct CompletedMeetingDocumentView: View {
                     Button {
                         Task { await appState.startNewMeeting() }
                     } label: {
-                        Text("开始新录音")
+                        Text(L("开始新录音", "New Recording"))
                             .font(.system(size: 12, weight: .medium))
                             .foregroundStyle(AppTheme.brandPrimary)
                             .padding(.horizontal, 12)
@@ -581,7 +593,7 @@ struct CompletedMeetingDocumentView: View {
                 .scrollContentBackground(.hidden)
                 .frame(minHeight: 72)
                 .padding(10)
-                .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.white))
+                .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(AppTheme.elevatedSurface))
                 .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(AppTheme.subtleBorder, lineWidth: 1))
             } else {
                 Text(meeting.manualNotes)
@@ -1041,7 +1053,7 @@ private struct AudioPlaybackStrip: View {
         .padding(.vertical, 8)
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color.white.opacity(0.95))
+                .fill(AppTheme.elevatedSurface.opacity(0.95))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
@@ -1141,7 +1153,7 @@ private struct DoubaoAIComposerView: View {
         .padding(.vertical, 12)
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color.white)
+                .fill(AppTheme.elevatedSurface)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
@@ -1235,8 +1247,8 @@ private struct TokenUsagePopoverView: View {
         }
         .padding(14)
         .frame(width: 230)
-        .background(Color.white)
-        .preferredColorScheme(.light)
+        .background(AppTheme.elevatedSurface)
+        .preferredColorScheme(ThemeManager.shared.preferredColorScheme)
     }
 
     private func statRow(_ label: String, _ value: String, bold: Bool = false) -> some View {
@@ -1351,8 +1363,8 @@ private struct SpeakerRenamePopoverView: View {
         }
         .padding(14)
         .frame(width: 280)
-        .background(Color.white)
-        .preferredColorScheme(.light)
+        .background(AppTheme.elevatedSurface)
+        .preferredColorScheme(ThemeManager.shared.preferredColorScheme)
         .onAppear {
             nameDraft = (currentName == "发言人" || currentName.hasPrefix("发言人 ")) ? "" : currentName
             enrollVoiceprint = hasAudioFile

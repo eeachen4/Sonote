@@ -246,14 +246,15 @@ struct MeetingPromptHUDView: View {
         .frame(width: cardWidth, height: cardHeight, alignment: .center)
         .background(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color.white)
+                .fill(AppTheme.elevatedSurface)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .strokeBorder(AppTheme.subtleBorder, lineWidth: 1)
         )
-        .shadow(color: .black.opacity(0.12), radius: 16, x: 0, y: 6)
-        .preferredColorScheme(.light)
+        .shadow(color: .black.opacity(0.14), radius: 16, x: 0, y: 6)
+        .tint(AppTheme.brandPrimary)
+        .preferredColorScheme(ThemeManager.shared.preferredColorScheme)
     }
 }
 
@@ -394,14 +395,15 @@ struct LiveCapsuleView: View {
         .frame(width: width, height: height, alignment: .center)
         .background(
             RoundedRectangle(cornerRadius: 15, style: .continuous)
-                .fill(Color.white)
+                .fill(AppTheme.elevatedSurface)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 15, style: .continuous)
                 .strokeBorder(AppTheme.subtleBorder, lineWidth: 1)
         )
-        .shadow(color: .black.opacity(0.13), radius: 16, x: 0, y: 6)
-        .preferredColorScheme(.light)
+        .shadow(color: .black.opacity(0.15), radius: 16, x: 0, y: 6)
+        .tint(AppTheme.brandPrimary)
+        .preferredColorScheme(ThemeManager.shared.preferredColorScheme)
     }
 
     private var liveSnippet: String {
@@ -446,7 +448,7 @@ private struct MiniDottedWaveformView: View {
                 Capsule()
                     .fill(v > 0.06 && isActive && !isPaused
                           ? AppTheme.brandPrimary.opacity(0.75)
-                          : Color(red: 0.78, green: 0.80, blue: 0.84))
+                          : AppTheme.waveformInactive)
                     .frame(width: 2, height: h)
                     .animation(.easeOut(duration: 0.1), value: v)
             }

@@ -9,19 +9,35 @@ import SonoteCore
 /// left minimalist navigation rail + right pure-white editorial card canvas.
 struct SettingsView: View {
     @ObservedObject var appState: AppState
+    @ObservedObject private var theme = ThemeManager.shared
 
     enum SectionTab: String, CaseIterable, Identifiable {
-        case aiModel = "AI 模型"
-        case audio = "音频与转写"
-        case voiceprint = "声纹库"
-        case templates = "纪要模板"
-        case detection = "自动检测"
-        case syncBackup = "协作与备份"
+        case general = "general"
+        case aiModel = "aiModel"
+        case audio = "audio"
+        case voiceprint = "voiceprint"
+        case templates = "templates"
+        case detection = "detection"
+        case syncBackup = "syncBackup"
 
         var id: String { rawValue }
 
+        @MainActor
+        var title: String {
+            switch self {
+            case .general: return L("通用", "General")
+            case .aiModel: return L("AI 模型", "AI Models")
+            case .audio: return L("音频与转写", "Audio & ASR")
+            case .voiceprint: return L("声纹库", "Voiceprints")
+            case .templates: return L("纪要模板", "Templates")
+            case .detection: return L("自动检测", "Detection")
+            case .syncBackup: return L("协作与备份", "Sync & Backup")
+            }
+        }
+
         var icon: String {
             switch self {
+            case .general: return "gearshape"
             case .aiModel: return "sparkles"
             case .audio: return "waveform"
             case .voiceprint: return "person.wave.2"
@@ -31,19 +47,21 @@ struct SettingsView: View {
             }
         }
 
+        @MainActor
         var subtitle: String {
             switch self {
-            case .aiModel: return "配置云端大模型或 App 内置离线 MLX 引擎（密钥加密存入钥匙串）"
-            case .audio: return "管理本机用户名、双轨采集、本地语音转写、人声降噪与存储空间"
-            case .voiceprint: return "本地 ECAPA-TDNN 192 维声纹库，支持跨会议自动识别真实姓名"
-            case .templates: return "设置默认纪要风格、会中实时提炼频率与团队自定义 Prompt 模板"
-            case .detection: return "控制开机自启、会议自动弹窗提醒、日历联动与系统级全局快捷键"
-            case .syncBackup: return "配置飞书 / 钉钉 / Notion Webhook 一键推送与全库备份迁移"
+            case .general: return L("设置界面语言、浅色/深色主题、主题色、阅读字号与窗口行为", "Customize interface language, light/dark appearance, accent color, typography & window behavior")
+            case .aiModel: return L("配置云端大模型或 App 内置离线 MLX 引擎（密钥加密存入钥匙串）", "Configure cloud LLMs or built-in offline Apple Silicon MLX models (secrets stored in Keychain)")
+            case .audio: return L("管理本机用户名、双轨采集、本地语音转写、人声降噪与存储空间", "Manage speaker name, dual-track capture, local ASR, neural denoising & audio storage")
+            case .voiceprint: return L("本地 ECAPA-TDNN 192 维声纹库，支持跨会议自动识别真实姓名", "Offline 192-dim ECAPA-TDNN voiceprint library for cross-meeting speaker recognition")
+            case .templates: return L("设置默认纪要风格、会中实时提炼频率与团队自定义 Prompt 模板", "Configure default summary template, live cadence & custom prompt templates")
+            case .detection: return L("控制开机自启、会议自动弹窗提醒、日历联动与系统级全局快捷键", "Control auto-launch, meeting detection prompts, Calendar sync & global hotkeys")
+            case .syncBackup: return L("配置飞书 / 钉钉 / Notion Webhook 一键推送与全库备份迁移", "Configure Feishu / DingTalk / Notion Webhooks and full-library archive backup")
             }
         }
     }
 
-    @State private var selectedTab: SectionTab = .audio
+    @State private var selectedTab: SectionTab = .general
     @State private var isTestingConnection = false
     @State private var testResult: GPTConnectionTestResult?
     @State private var discoveredAuthFiles: [String] = []
@@ -76,9 +94,10 @@ struct SettingsView: View {
 
             rightDetailCanvas
         }
-        .frame(width: 780, height: 590)
+        .frame(width: 780, height: 600)
         .background(AppTheme.canvasWhite)
-        .preferredColorScheme(.light)
+        .tint(AppTheme.brandPrimary)
+        .preferredColorScheme(theme.preferredColorScheme)
         .onAppear {
             discoveredAuthFiles = AuthManager.shared.discoverExistingAuthFiles()
             refreshCodexModels()
@@ -103,7 +122,7 @@ struct SettingsView: View {
                         .font(.system(size: 11.5, weight: .bold))
                         .foregroundStyle(AppTheme.brandPrimary)
                 }
-                Text("Sonote 设置")
+                Text(L("Sonote 设置", "Settings"))
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(AppTheme.textPrimary)
                 Spacer()
@@ -128,7 +147,7 @@ struct SettingsView: View {
                                 .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
                                 .foregroundStyle(isSelected ? AppTheme.brandPrimary : AppTheme.textSecondary)
                                 .frame(width: 18)
-                            Text(tab.rawValue)
+                            Text(tab.title)
                                 .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
                                 .foregroundStyle(isSelected ? AppTheme.brandPrimary : AppTheme.textPrimary)
                             Spacer()
@@ -138,7 +157,7 @@ struct SettingsView: View {
                                     .foregroundStyle(isSelected ? AppTheme.brandPrimary : AppTheme.textMuted)
                                     .padding(.horizontal, 6)
                                     .padding(.vertical, 1)
-                                    .background(Capsule().fill(isSelected ? Color.white.opacity(0.85) : AppTheme.neutralPill))
+                                    .background(Capsule().fill(isSelected ? AppTheme.elevatedSurface.opacity(0.9) : AppTheme.neutralPill))
                             }
                         }
                         .padding(.horizontal, 11)
@@ -169,8 +188,10 @@ struct SettingsView: View {
                 }
                 Text(
                     appState.todayTokenUsage.isEmpty
-                        ? "今日暂无 Token 消耗"
-                        : "今日 \(appState.todayTokenUsage.formattedCompact) tokens"
+                        ? L("今日暂无 Token 消耗", "No tokens used today")
+                        : (theme.isEnglish
+                            ? "Today \(appState.todayTokenUsage.formattedCompact) tokens"
+                            : "今日 \(appState.todayTokenUsage.formattedCompact) tokens")
                 )
                 .font(.system(size: 11))
                 .foregroundStyle(AppTheme.textSecondary)
@@ -179,7 +200,7 @@ struct SettingsView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(Color.white.opacity(0.85))
+                    .fill(AppTheme.elevatedSurface.opacity(0.9))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
@@ -191,14 +212,14 @@ struct SettingsView: View {
         .background(AppTheme.leftPaneBg)
     }
 
-    // MARK: - Right Pure-White Detail Canvas
+    // MARK: - Right Adaptive Detail Canvas
 
     private var rightDetailCanvas: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 // Clean Editorial Page Header
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(selectedTab.rawValue)
+                    Text(selectedTab.title)
                         .font(.system(size: 19, weight: .semibold))
                         .foregroundStyle(AppTheme.textPrimary)
                     Text(selectedTab.subtitle)
@@ -208,6 +229,8 @@ struct SettingsView: View {
                 .padding(.bottom, 2)
 
                 switch selectedTab {
+                case .general:
+                    generalPage
                 case .aiModel:
                     aiModelPage
                 case .audio:
@@ -228,6 +251,359 @@ struct SettingsView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .background(AppTheme.canvasWhite)
+    }
+
+    // MARK: - Page 0: 通用设置 (General: Language, Theme, Accent Color, Typography & Startup)
+
+    private var generalPage: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            // Card 1: Appearance & Accent Theme
+            SettingsCard(
+                title: L("外观与主题", "Appearance & Theme"),
+                subtitle: L("实时切换浅色、深色或跟随系统，并自定义全局主题强调色", "Switch Light, Dark, or Auto appearance and customize your global accent color in real time")
+            ) {
+                VStack(alignment: .leading, spacing: 16) {
+                    // 1.1 Appearance Mode Miniature Preview Cards
+                    VStack(alignment: .leading, spacing: 8) {
+                        fieldLabel(L("主题模式", "Appearance"))
+                        HStack(spacing: 10) {
+                            ForEach(AppAppearanceMode.allCases) { mode in
+                                appearancePreviewCard(mode)
+                            }
+                        }
+                    }
+
+                    Divider().overlay(AppTheme.divider)
+
+                    // 1.2 Accent Theme Color Swatches
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack {
+                            fieldLabel(L("主题色", "Accent Color"))
+                            Spacer()
+                            Text(appState.settings.accentTheme.localizedName(isEnglish: theme.isEnglish))
+                                .font(.system(size: 11.5, weight: .medium))
+                                .foregroundStyle(AppTheme.brandPrimary)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 2.5)
+                                .background(Capsule().fill(AppTheme.brandSoftFill))
+                        }
+
+                        HStack(spacing: 12) {
+                            ForEach(AppAccentTheme.allCases) { accentOption in
+                                let isSelected = appState.settings.accentTheme == accentOption
+                                let swatchColor = AppTheme.accentColor(for: accentOption)
+                                Button {
+                                    withAnimation(.easeInOut(duration: 0.16)) {
+                                        appState.settings.accentTheme = accentOption
+                                    }
+                                } label: {
+                                    VStack(spacing: 6) {
+                                        ZStack {
+                                            Circle()
+                                                .strokeBorder(isSelected ? swatchColor : Color.clear, lineWidth: 2)
+                                                .frame(width: 34, height: 34)
+                                            Circle()
+                                                .fill(swatchColor)
+                                                .frame(width: 26, height: 26)
+                                                .shadow(color: swatchColor.opacity(0.32), radius: 3, y: 1)
+                                            if isSelected {
+                                                Image(systemName: "checkmark")
+                                                    .font(.system(size: 11, weight: .bold))
+                                                    .foregroundStyle(.white)
+                                            }
+                                        }
+                                        Text(accentOption.localizedName(isEnglish: theme.isEnglish))
+                                            .font(.system(size: 10.5, weight: isSelected ? .semibold : .regular))
+                                            .foregroundStyle(isSelected ? AppTheme.textPrimary : AppTheme.textSecondary)
+                                    }
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 4)
+                                    .contentShape(Rectangle())
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
+
+                    Divider().overlay(AppTheme.divider)
+
+                    // 1.3 Reading Font Size
+                    VStack(alignment: .leading, spacing: 9) {
+                        HStack {
+                            fieldLabel(
+                                L("纪要阅读字号", "Reading Font Size"),
+                                hint: L("调整会议纪要与逐字稿正文大小", "Adjust summary & transcript text scale")
+                            )
+                            Spacer()
+                            HStack(spacing: 6) {
+                                ForEach(AppFontScale.allCases) { scale in
+                                    let active = appState.settings.fontScale == scale
+                                    Button {
+                                        withAnimation(.easeInOut(duration: 0.14)) {
+                                            appState.settings.fontScale = scale
+                                        }
+                                    } label: {
+                                        Text(scale.localizedName(isEnglish: theme.isEnglish))
+                                            .font(.system(size: 11.5, weight: active ? .semibold : .regular))
+                                            .foregroundStyle(active ? AppTheme.brandPrimary : AppTheme.textSecondary)
+                                            .padding(.horizontal, 10)
+                                            .padding(.vertical, 5)
+                                            .background(
+                                                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                                                    .fill(active ? AppTheme.brandSoftFill : AppTheme.softCardBg)
+                                            )
+                                            .overlay(
+                                                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                                                    .strokeBorder(active ? AppTheme.brandPrimary.opacity(0.35) : Color.clear, lineWidth: 1)
+                                            )
+                                            .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                        }
+
+                        Text(L(
+                            "预览效果：Sonote 实时将会议语音提炼为结构化决议与待办事项。",
+                            "Preview: Sonote turns live meetings into clear decisions and action items."
+                        ))
+                        .font(.system(size: AppTheme.scaled(13.5)))
+                        .foregroundStyle(AppTheme.textSecondary)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(AppTheme.softCardBg))
+                    }
+                }
+            }
+
+            // Card 2: Interface Language
+            SettingsCard(
+                title: L("语言", "Language"),
+                subtitle: L("界面语言切换后立即生效，无需重启应用", "Interface language updates live across windows without restarting")
+            ) {
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack(spacing: 12) {
+                        fieldLabel(L("界面语言", "Interface Language"))
+                        Spacer()
+                        HStack(spacing: 6) {
+                            ForEach(AppInterfaceLanguage.allCases) { lang in
+                                let active = appState.settings.interfaceLanguage == lang
+                                Button {
+                                    withAnimation(.easeInOut(duration: 0.14)) {
+                                        appState.settings.interfaceLanguage = lang
+                                    }
+                                } label: {
+                                    Text(lang.localizedName(isEnglish: theme.isEnglish))
+                                        .font(.system(size: 12, weight: active ? .semibold : .regular))
+                                        .foregroundStyle(active ? AppTheme.brandPrimary : AppTheme.textSecondary)
+                                        .padding(.horizontal, 11)
+                                        .padding(.vertical, 6)
+                                        .background(
+                                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                                .fill(active ? AppTheme.brandSoftFill : AppTheme.softCardBg)
+                                        )
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                                .strokeBorder(active ? AppTheme.brandPrimary.opacity(0.35) : Color.clear, lineWidth: 1)
+                                        )
+                                        .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
+
+                    Divider().overlay(AppTheme.divider)
+
+                    HStack(spacing: 12) {
+                        fieldLabel(
+                            L("语音转写识别语言", "Speech Recognition Language"),
+                            hint: appState.settings.transcriptionLanguage.displayName
+                        )
+                        Spacer()
+                        CleanSmallButton(L("前往音频设置", "Audio Settings")) {
+                            withAnimation(.easeInOut(duration: 0.14)) {
+                                selectedTab = .audio
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Card 3: Startup & Window Behavior
+            SettingsCard(title: L("启动与窗口行为", "Startup & Window")) {
+                VStack(alignment: .leading, spacing: 12) {
+                    SettingsToggleRow(
+                        title: L("登录 macOS 时自动启动", "Launch at Login"),
+                        subtitle: L("开机静默驻留顶部菜单栏，加入会议自动提醒", "Start silently in the menu bar to detect meetings automatically"),
+                        isOn: Binding(
+                            get: { launchAtLogin },
+                            set: { newValue in
+                                try? LaunchAtLoginService.setEnabled(newValue)
+                                launchAtLogin = LaunchAtLoginService.isEnabled
+                            }
+                        )
+                    )
+
+                    Divider().overlay(AppTheme.divider)
+
+                    SettingsToggleRow(
+                        title: L("菜单栏显示录制时长计时", "Show Recording Timer in Menu Bar"),
+                        subtitle: L("录制会议时在顶部状态栏波形图标旁显示实时计时", "Display live elapsed time next to the menu bar icon while recording"),
+                        isOn: $appState.settings.showMenuBarTimer
+                    )
+
+                    Divider().overlay(AppTheme.divider)
+
+                    SettingsToggleRow(
+                        title: L("关闭主窗口后保持驻留菜单栏", "Keep Running in Menu Bar on Close"),
+                        subtitle: L("关闭主窗口时不退出应用，持续在后台监测会议", "Keep Sonote active in the menu bar when closing the main window"),
+                        isOn: $appState.settings.keepRunningInMenuBarOnClose
+                    )
+
+                    Divider().overlay(AppTheme.divider)
+
+                    SettingsToggleRow(
+                        title: L("录制中自动收起为左上角悬浮小窗", "Minimize to Floating Capsule While Recording"),
+                        subtitle: L("开会时不遮挡屏幕，随时一键展开完整双栏视图", "Keep a compact floating HUD during calls with one-click expand"),
+                        isOn: $appState.settings.showFloatingCapsuleWhileRecording
+                    )
+                }
+            }
+
+            // Card 4: About Sonote
+            SettingsCard(title: L("关于", "About")) {
+                HStack(spacing: 12) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .fill(AppTheme.brandSoftFill)
+                            .frame(width: 40, height: 40)
+                        Image(systemName: "waveform")
+                            .font(.system(size: 17, weight: .bold))
+                            .foregroundStyle(AppTheme.brandPrimary)
+                    }
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack(spacing: 6) {
+                            Text("Sonote")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundStyle(AppTheme.textPrimary)
+                            Text("声记")
+                                .font(.system(size: 11.5))
+                                .foregroundStyle(AppTheme.textMuted)
+                            Text("v1.5.0")
+                                .font(.system(size: 10.5, weight: .medium, design: .monospaced))
+                                .foregroundStyle(AppTheme.brandPrimary)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 1.5)
+                                .background(Capsule().fill(AppTheme.brandSoftFill))
+                        }
+                        Text(L("原生 macOS Apple Silicon MLX 智能会议纪要 · MIT License", "Native macOS Apple Silicon MLX Meeting Minutes · MIT License"))
+                            .font(.system(size: 11.5))
+                            .foregroundStyle(AppTheme.textSecondary)
+                    }
+
+                    Spacer()
+
+                    CleanSmallButton(L("数据目录", "Data Folder")) {
+                        NSWorkspace.shared.open(MeetingStore.shared.baseDirectory)
+                    }
+                    CleanSmallButton("GitHub") {
+                        if let url = URL(string: "https://github.com/eeachen4/Sonote") {
+                            NSWorkspace.shared.open(url)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func appearancePreviewCard(_ mode: AppAppearanceMode) -> some View {
+        let isSelected = appState.settings.appearanceMode == mode
+        let accent = AppTheme.brandPrimary
+        return Button {
+            withAnimation(.easeInOut(duration: 0.16)) {
+                appState.settings.appearanceMode = mode
+            }
+        } label: {
+            VStack(spacing: 8) {
+                ZStack {
+                    switch mode {
+                    case .light:
+                        miniWindowMock(isDark: false, accent: accent)
+                    case .dark:
+                        miniWindowMock(isDark: true, accent: accent)
+                    case .system:
+                        GeometryReader { geo in
+                            ZStack(alignment: .leading) {
+                                miniWindowMock(isDark: true, accent: accent)
+                                miniWindowMock(isDark: false, accent: accent)
+                                    .frame(width: geo.size.width / 2, alignment: .leading)
+                                    .clipped()
+                            }
+                        }
+                    }
+                }
+                .frame(height: 58)
+                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .strokeBorder(isSelected ? accent : AppTheme.subtleBorder, lineWidth: isSelected ? 2 : 1)
+                )
+
+                HStack(spacing: 4) {
+                    if isSelected {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 11))
+                            .foregroundStyle(accent)
+                    }
+                    Text(mode.localizedName(isEnglish: theme.isEnglish))
+                        .font(.system(size: 12, weight: isSelected ? .semibold : .regular))
+                        .foregroundStyle(isSelected ? AppTheme.textPrimary : AppTheme.textSecondary)
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .padding(8)
+            .background(
+                RoundedRectangle(cornerRadius: 11, style: .continuous)
+                    .fill(isSelected ? AppTheme.brandSoftFill.opacity(0.55) : AppTheme.softCardBg)
+            )
+            .contentShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func miniWindowMock(isDark: Bool, accent: Color) -> some View {
+        let bg = isDark ? Color(red: 0.10, green: 0.11, blue: 0.14) : Color.white
+        let sidebar = isDark ? Color(red: 0.14, green: 0.15, blue: 0.19) : Color(red: 0.96, green: 0.97, blue: 0.98)
+        let line = isDark ? Color.white.opacity(0.22) : Color.black.opacity(0.12)
+        return HStack(spacing: 0) {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 2.5) {
+                    Circle().fill(Color.red.opacity(0.75)).frame(width: 4, height: 4)
+                    Circle().fill(Color.orange.opacity(0.75)).frame(width: 4, height: 4)
+                    Circle().fill(Color.green.opacity(0.75)).frame(width: 4, height: 4)
+                }
+                RoundedRectangle(cornerRadius: 2).fill(accent.opacity(0.85)).frame(width: 24, height: 5)
+                RoundedRectangle(cornerRadius: 2).fill(line).frame(width: 20, height: 4)
+                RoundedRectangle(cornerRadius: 2).fill(line).frame(width: 22, height: 4)
+                Spacer()
+            }
+            .padding(6)
+            .frame(width: 38, alignment: .leading)
+            .background(sidebar)
+
+            VStack(alignment: .leading, spacing: 5) {
+                RoundedRectangle(cornerRadius: 2.5).fill(accent.opacity(0.28)).frame(width: 44, height: 8)
+                RoundedRectangle(cornerRadius: 2).fill(line).frame(maxWidth: .infinity, maxHeight: 4)
+                RoundedRectangle(cornerRadius: 2).fill(line).frame(width: 52, height: 4)
+                Spacer()
+            }
+            .padding(7)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .background(bg)
+        }
     }
 
     // MARK: - Page 1: AI 模型与认证
@@ -1681,7 +2057,7 @@ private struct SettingsCard<Content: View>: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(Color.white)
+                        .fill(AppTheme.elevatedSurface)
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: 12, style: .continuous)

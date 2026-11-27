@@ -109,7 +109,7 @@ struct SmartMinutesPaneView: View {
                 .frame(width: 26, height: 24)
                 .background(
                     RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .fill(active ? Color.white : Color.clear)
+                        .fill(active ? AppTheme.elevatedSurface : Color.clear)
                         .shadow(color: active ? .black.opacity(0.06) : .clear, radius: 2, y: 1)
                 )
                 .contentShape(Rectangle())
@@ -165,7 +165,7 @@ struct SmartMinutesPaneView: View {
 
                 HStack(alignment: .top, spacing: 8) {
                     Circle()
-                        .fill(Color(red: 0.78, green: 0.80, blue: 0.84))
+                        .fill(AppTheme.waveformInactive)
                         .frame(width: 4, height: 4)
                         .padding(.top, 5)
                     VStack(alignment: .leading, spacing: 8) {

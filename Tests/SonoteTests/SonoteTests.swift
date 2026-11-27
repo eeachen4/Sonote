@@ -764,6 +764,35 @@ final class SonoteTests: XCTestCase {
         XCTAssertEqual(migratedMeetings.count, 1)
         XCTAssertEqual(migratedMeetings.first?.audioFilePath, migratedStore.audioBackupURL(for: session.id).path)
         XCTAssertEqual(VoiceprintStore(baseDirectory: migratedRoot).loadProfiles().first?.name, "陈晨")
+
+        // 5. General Settings (Interface Language, Appearance, Accent Theme, Font Scale & Window Behavior)
+        let legacyMinimalJSON = #"{"authMode":"localAuthFile"}"#
+        let defaultGeneral = try JSONDecoder().decode(AppSettings.self, from: Data(legacyMinimalJSON.utf8))
+        XCTAssertEqual(defaultGeneral.interfaceLanguage, .system)
+        XCTAssertEqual(defaultGeneral.appearanceMode, .light)
+        XCTAssertEqual(defaultGeneral.accentTheme, .cobaltBlue)
+        XCTAssertEqual(defaultGeneral.fontScale, .standard)
+        XCTAssertTrue(defaultGeneral.showMenuBarTimer)
+        XCTAssertTrue(defaultGeneral.keepRunningInMenuBarOnClose)
+
+        var customized = defaultGeneral
+        customized.interfaceLanguage = .en
+        customized.appearanceMode = .dark
+        customized.accentTheme = .emeraldGreen
+        customized.fontScale = .comfortable
+        customized.showMenuBarTimer = false
+        customized.keepRunningInMenuBarOnClose = false
+        let roundTripData = try JSONEncoder().encode(customized)
+        let roundTripped = try JSONDecoder().decode(AppSettings.self, from: roundTripData)
+        XCTAssertEqual(roundTripped.interfaceLanguage, .en)
+        XCTAssertTrue(roundTripped.interfaceLanguage.resolvedIsEnglish)
+        XCTAssertFalse(AppInterfaceLanguage.zhHans.resolvedIsEnglish)
+        XCTAssertEqual(roundTripped.appearanceMode, .dark)
+        XCTAssertEqual(roundTripped.accentTheme, .emeraldGreen)
+        XCTAssertEqual(roundTripped.fontScale, .comfortable)
+        XCTAssertEqual(roundTripped.fontScale.multiplier, 1.12, accuracy: 0.001)
+        XCTAssertFalse(roundTripped.showMenuBarTimer)
+        XCTAssertFalse(roundTripped.keepRunningInMenuBarOnClose)
     }
 
     // MARK: - Opt-in Live Hardware Verification for DeepFilterNet3, ECAPA-TDNN & Sortformer (SONOTE_LIVE_V15=1)

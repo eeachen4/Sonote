@@ -7,6 +7,11 @@ import SonoteCore
 struct MarkdownContentView: View {
     let markdown: String
     var fontSize: CGFloat = 13.5
+    @ObservedObject private var theme = ThemeManager.shared
+
+    private var effectiveFontSize: CGFloat {
+        (fontSize * CGFloat(theme.fontScale.multiplier)).rounded(.toNearestOrAwayFromZero)
+    }
 
     var body: some View {
         let blocks = MarkdownParser.parse(markdown)
@@ -30,7 +35,7 @@ struct MarkdownContentView: View {
 
         case .paragraph(let text):
             inlineMarkdownText(text)
-                .font(.system(size: fontSize))
+                .font(.system(size: effectiveFontSize))
                 .foregroundStyle(AppTheme.textPrimary.opacity(0.92))
                 .lineSpacing(4.5)
                 .textSelection(.enabled)
@@ -52,7 +57,7 @@ struct MarkdownContentView: View {
                         }
 
                         inlineMarkdownText(item.text)
-                            .font(.system(size: fontSize))
+                            .font(.system(size: effectiveFontSize))
                             .foregroundStyle(AppTheme.textPrimary.opacity(0.92))
                             .lineSpacing(4)
                             .textSelection(.enabled)
@@ -66,11 +71,11 @@ struct MarkdownContentView: View {
                 ForEach(Array(items.enumerated()), id: \.offset) { _, item in
                     HStack(alignment: .top, spacing: 7) {
                         Text("\(item.number).")
-                            .font(.system(size: fontSize - 0.5, weight: .medium, design: .monospaced))
+                            .font(.system(size: effectiveFontSize - 0.5, weight: .medium, design: .monospaced))
                             .foregroundStyle(AppTheme.textSecondary)
                             .frame(minWidth: 18, alignment: .trailing)
                         inlineMarkdownText(item.text)
-                            .font(.system(size: fontSize))
+                            .font(.system(size: effectiveFontSize))
                             .foregroundStyle(AppTheme.textPrimary.opacity(0.92))
                             .lineSpacing(4)
                             .textSelection(.enabled)
@@ -80,7 +85,7 @@ struct MarkdownContentView: View {
             }
 
         case .table(let headers, let rows):
-            MarkdownTableView(headers: headers, rows: rows, fontSize: fontSize - 0.5)
+            MarkdownTableView(headers: headers, rows: rows, fontSize: effectiveFontSize - 0.5)
 
         case .blockquote(let text):
             HStack(alignment: .top, spacing: 10) {
@@ -88,7 +93,7 @@ struct MarkdownContentView: View {
                     .fill(AppTheme.brandPrimary.opacity(0.45))
                     .frame(width: 3)
                 inlineMarkdownText(text)
-                    .font(.system(size: fontSize - 0.5))
+                    .font(.system(size: effectiveFontSize - 0.5))
                     .foregroundStyle(AppTheme.textSecondary)
                     .lineSpacing(4)
                     .textSelection(.enabled)
@@ -107,16 +112,17 @@ struct MarkdownContentView: View {
 
     private func headingSize(_ level: Int) -> CGFloat {
         switch level {
-        case 1: return fontSize + 4.5
-        case 2: return fontSize + 2.5
-        case 3: return fontSize + 1.0
-        default: return fontSize
+        case 1: return effectiveFontSize + 4.5
+        case 2: return effectiveFontSize + 2.5
+        case 3: return effectiveFontSize + 1.0
+        default: return effectiveFontSize
         }
     }
 }
 
 /// Renders inline Markdown (`**bold**`, `*italic*`, `` `code` ``, `~~strike~~`, `[link](url)`, `<br>`)
 /// using our CJK-friendly native parser so patterns like `**云端编译：**正文` always render cleanly.
+@MainActor
 func inlineMarkdownText(_ raw: String) -> Text {
     let spans = MarkdownParser.parseInline(raw)
     guard !spans.isEmpty else { return Text("") }
@@ -133,7 +139,7 @@ func inlineMarkdownText(_ raw: String) -> Text {
         }
         if span.style.contains(.code) {
             intent.insert(.code)
-            part.backgroundColor = Color(red: 0.94, green: 0.95, blue: 0.97)
+            part.backgroundColor = AppTheme.inlineCodeBg
         }
         if !intent.isEmpty {
             part.inlinePresentationIntent = intent
@@ -191,7 +197,7 @@ private struct MarkdownTableView: View {
                                 .padding(.horizontal, 12)
                                 .padding(.vertical, 8)
                                 .frame(minWidth: 88, maxWidth: .infinity, alignment: .leading)
-                                .background(rowIdx % 2 == 1 ? AppTheme.softCardBg.opacity(0.6) : Color.white)
+                                .background(rowIdx % 2 == 1 ? AppTheme.softCardBg.opacity(0.6) : AppTheme.elevatedSurface)
                                 .overlay(alignment: .trailing) {
                                     if colIdx < row.count - 1 {
                                         Rectangle().fill(AppTheme.divider).frame(width: 1)
@@ -253,7 +259,7 @@ private struct MarkdownCodeBlockView: View {
                     .textSelection(.enabled)
             }
         }
-        .background(Color.white)
+        .background(AppTheme.elevatedSurface)
         .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 8, style: .continuous)

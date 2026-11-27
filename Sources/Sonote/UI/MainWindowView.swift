@@ -9,6 +9,7 @@ import SonoteCore
 /// - Completed Document View: serene pure-white summary page with light backdrop & back navigation
 struct MainWindowView: View {
     @ObservedObject var appState: AppState
+    @ObservedObject private var theme = ThemeManager.shared
     @Environment(\.openSettings) private var openSettings
 
     @State private var searchText: String = ""
@@ -36,7 +37,8 @@ struct MainWindowView: View {
             }
         }
         .frame(minWidth: 740, minHeight: 520)
-        .preferredColorScheme(.light)
+        .tint(AppTheme.brandPrimary)
+        .preferredColorScheme(theme.preferredColorScheme)
         .sheet(isPresented: $showPasteSheet) {
             PasteTranscriptSheet(appState: appState, isPresented: $showPasteSheet)
         }
@@ -90,18 +92,18 @@ struct MainWindowView: View {
                             HStack(spacing: 5) {
                                 Image(systemName: "checklist")
                                     .font(.system(size: 11))
-                                Text(appState.openActionItemsCount > 0 ? "待办 \(appState.openActionItemsCount)" : "待办")
+                                Text(appState.openActionItemsCount > 0 ? "\(L("待办", "Todos")) \(appState.openActionItemsCount)" : L("待办", "Todos"))
                                     .font(.system(size: 11.5, weight: .medium))
                             }
                             .foregroundStyle(appState.openActionItemsCount > 0 ? AppTheme.brandPrimary : AppTheme.textSecondary)
                             .padding(.horizontal, 10)
                             .padding(.vertical, 5)
-                            .background(Capsule().fill(Color.white.opacity(0.85)))
+                            .background(Capsule().fill(AppTheme.elevatedSurface.opacity(0.88)))
                             .overlay(Capsule().strokeBorder(AppTheme.subtleBorder, lineWidth: 1))
                             .contentShape(Capsule())
                         }
                         .buttonStyle(.plain)
-                        .help("查看全部会议待办并同步到 Apple 提醒事项")
+                        .help(L("查看全部会议待办并同步到 Apple 提醒事项", "View all action items and sync to Apple Reminders"))
 
                         // Cross-Meeting AI Synthesis Pill
                         Button {
@@ -110,18 +112,18 @@ struct MainWindowView: View {
                             HStack(spacing: 4) {
                                 Image(systemName: "sparkles")
                                     .font(.system(size: 11))
-                                Text("跨会议问答")
+                                Text(L("跨会议问答", "Ask Across"))
                                     .font(.system(size: 11.5, weight: .medium))
                             }
                             .foregroundStyle(AppTheme.textSecondary)
                             .padding(.horizontal, 10)
                             .padding(.vertical, 5)
-                            .background(Capsule().fill(Color.white.opacity(0.85)))
+                            .background(Capsule().fill(AppTheme.elevatedSurface.opacity(0.88)))
                             .overlay(Capsule().strokeBorder(AppTheme.subtleBorder, lineWidth: 1))
                             .contentShape(Capsule())
                         }
                         .buttonStyle(.plain)
-                        .help("勾选多场会议进行跨周汇总、对比阻塞项进展")
+                        .help(L("勾选多场会议进行跨周汇总、对比阻塞项进展", "Synthesize summaries and compare blockers across multiple meetings"))
                     }
 
                     // Quiet AI Auth & Today Token Pill -> Opens Settings
@@ -136,19 +138,19 @@ struct MainWindowView: View {
                                 .font(.system(size: 11.5, weight: .medium))
                                 .foregroundStyle(AppTheme.textSecondary)
                             if !appState.todayTokenUsage.isEmpty {
-                                Text("· 今日 \(appState.todayTokenUsage.formattedCompact) tokens")
+                                Text(theme.isEnglish ? "· Today \(appState.todayTokenUsage.formattedCompact)t" : "· 今日 \(appState.todayTokenUsage.formattedCompact) tokens")
                                     .font(.system(size: 11))
                                     .foregroundStyle(AppTheme.textMuted)
                             }
                         }
                         .padding(.horizontal, 10)
                         .padding(.vertical, 5)
-                        .background(Capsule().fill(Color.white.opacity(0.85)))
+                        .background(Capsule().fill(AppTheme.elevatedSurface.opacity(0.88)))
                         .overlay(Capsule().strokeBorder(AppTheme.subtleBorder, lineWidth: 1))
                         .contentShape(Capsule())
                     }
                     .buttonStyle(.plain)
-                    .help(appState.totalTokenUsage.isEmpty ? "点击配置 GPT 凭证与模型" : "历史累计：\(appState.totalTokenUsage.formattedCompact) tokens（\(appState.totalTokenUsage.detailedSummary)）")
+                    .help(appState.totalTokenUsage.isEmpty ? L("点击配置 AI 凭证与模型", "Configure AI providers and models") : "\(L("历史累计：", "Total: "))\(appState.totalTokenUsage.formattedCompact) tokens（\(appState.totalTokenUsage.detailedSummary)）")
 
                     Button {
                         openSettings()
@@ -157,11 +159,11 @@ struct MainWindowView: View {
                             .font(.system(size: 13.5))
                             .foregroundStyle(AppTheme.textSecondary)
                             .frame(width: 28, height: 28)
-                            .background(Circle().fill(Color.white.opacity(0.75)))
+                            .background(Circle().fill(AppTheme.elevatedSurface.opacity(0.82)))
                             .overlay(Circle().strokeBorder(AppTheme.subtleBorder, lineWidth: 1))
                     }
                     .buttonStyle(.plain)
-                    .help("偏好设置")
+                    .help(L("偏好设置", "Settings"))
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 12)
@@ -192,13 +194,13 @@ struct MainWindowView: View {
                                         .fill(appState.settings.autoDetectMeetings ? AppTheme.brandPrimary : AppTheme.textMuted)
                                         .frame(width: 6, height: 6)
                                     Text(appState.settings.autoDetectMeetings
-                                         ? "已开启自动检测 · 加入腾讯会议 / 飞书 / Zoom / 网页会议时自动提醒"
-                                         : "自动会议检测已关闭")
+                                         ? L("已开启自动检测 · 加入腾讯会议 / 飞书 / Zoom / 网页会议时自动提醒", "Auto-detection on · Prompts automatically when joining Zoom, Teams, Feishu, or Meet")
+                                         : L("自动会议检测已关闭", "Auto meeting detection is off"))
                                         .font(.system(size: 12))
                                         .foregroundStyle(AppTheme.textSecondary)
                                 }
 
-                                Button("预览提醒") {
+                                Button(L("预览提醒", "Preview Prompt")) {
                                     appState.triggerSimulatedMeetingPrompt()
                                 }
                                 .buttonStyle(.plain)
@@ -212,8 +214,8 @@ struct MainWindowView: View {
                         HStack(spacing: 12) {
                             HomeActionCard(
                                 icon: "mic.fill",
-                                title: "开始新录音",
-                                subtitle: "双轨采集系统与麦声音，会中同步总结",
+                                title: L("开始新录音", "Start Recording"),
+                                subtitle: L("双轨采集系统与麦声音，会中同步总结", "Dual-track system & mic capture with live minutes"),
                                 isPrimary: true
                             ) {
                                 Task { await appState.startNewMeeting() }
@@ -221,8 +223,8 @@ struct MainWindowView: View {
 
                             HomeActionCard(
                                 icon: "waveform.badge.plus",
-                                title: "导入音视频",
-                                subtitle: "支持 .m4a / .mp3 / .mp4 拖入离线转写",
+                                title: L("导入音视频", "Import Media"),
+                                subtitle: L("支持 .m4a / .mp3 / .mp4 拖入离线转写", "Drop .m4a / .mp3 / .mp4 for offline transcription"),
                                 isPrimary: false
                             ) {
                                 pickAndImportMediaFile()
@@ -230,8 +232,8 @@ struct MainWindowView: View {
 
                             HomeActionCard(
                                 icon: "doc.text.fill",
-                                title: "文本生成纪要",
-                                subtitle: "粘贴会议记录或文稿，一键整理导图",
+                                title: L("文本生成纪要", "Paste Transcript"),
+                                subtitle: L("粘贴会议记录或文稿，一键整理导图", "Paste notes or transcripts to generate structured minutes"),
                                 isPrimary: false
                             ) {
                                 showPasteSheet = true
@@ -241,7 +243,7 @@ struct MainWindowView: View {
                         // Recent Meetings Section
                         VStack(alignment: .leading, spacing: 14) {
                             HStack(alignment: .center) {
-                                Text("最近记录")
+                                Text(L("最近记录", "Recent Meetings"))
                                     .font(.system(size: 14.5, weight: .semibold))
                                     .foregroundStyle(AppTheme.textPrimary)
 
@@ -261,10 +263,10 @@ struct MainWindowView: View {
                                         Image(systemName: "magnifyingglass")
                                             .font(.system(size: 11))
                                             .foregroundStyle(AppTheme.textMuted)
-                                        TextField("搜索标题、逐字稿或待办...", text: $searchText)
+                                        TextField(L("搜索标题、逐字稿或待办...", "Search title, transcript, or todos..."), text: $searchText)
                                             .textFieldStyle(.plain)
                                             .font(.system(size: 12))
-                                            .frame(width: 175)
+                                            .frame(width: 185)
                                         if !searchText.isEmpty {
                                             Button {
                                                 searchText = ""
@@ -278,7 +280,7 @@ struct MainWindowView: View {
                                     }
                                     .padding(.horizontal, 10)
                                     .padding(.vertical, 5)
-                                    .background(Capsule().fill(Color.white.opacity(0.9)))
+                                    .background(Capsule().fill(AppTheme.elevatedSurface.opacity(0.92)))
                                     .overlay(Capsule().strokeBorder(AppTheme.subtleBorder, lineWidth: 1))
                                 }
                             }
@@ -287,7 +289,7 @@ struct MainWindowView: View {
                             if !appState.allMeetingTags.isEmpty {
                                 ScrollView(.horizontal, showsIndicators: false) {
                                     HStack(spacing: 6) {
-                                        homeTagFilterPill("全部", isSelected: selectedTagFilter == nil) {
+                                        homeTagFilterPill(L("全部", "All"), isSelected: selectedTagFilter == nil) {
                                             selectedTagFilter = nil
                                         }
                                         ForEach(appState.allMeetingTags, id: \.self) { tag in
@@ -473,7 +475,7 @@ struct MainWindowView: View {
         .padding(.vertical, 36)
         .background(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color.white.opacity(0.75))
+                .fill(AppTheme.elevatedSurface.opacity(0.8))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
@@ -486,10 +488,10 @@ struct MainWindowView: View {
     private var timeGreeting: String {
         let hour = Calendar.current.component(.hour, from: Date())
         switch hour {
-        case 5..<12: return "早上好，准备记录会议"
-        case 12..<14: return "中午好，准备记录会议"
-        case 14..<18: return "下午好，准备记录会议"
-        default: return "晚上好，准备记录会议"
+        case 5..<12: return L("早上好，准备记录会议", "Good morning, ready to capture")
+        case 12..<14: return L("中午好，准备记录会议", "Good afternoon, ready to capture")
+        case 14..<18: return L("下午好，准备记录会议", "Good afternoon, ready to capture")
+        default: return L("晚上好，准备记录会议", "Good evening, ready to capture")
         }
     }
 
@@ -522,7 +524,7 @@ struct MainWindowView: View {
                 .foregroundStyle(isSelected ? AppTheme.brandPrimary : AppTheme.textSecondary)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 4)
-                .background(Capsule().fill(isSelected ? AppTheme.brandSoftFill : Color.white.opacity(0.85)))
+                .background(Capsule().fill(isSelected ? AppTheme.brandSoftFill : AppTheme.elevatedSurface.opacity(0.88)))
                 .overlay(Capsule().strokeBorder(isSelected ? Color.clear : AppTheme.subtleBorder, lineWidth: 1))
                 .contentShape(Capsule())
         }
@@ -561,9 +563,9 @@ struct MainWindowView: View {
         }
 
         var groups: [MeetingGroup] = []
-        if !today.isEmpty { groups.append(MeetingGroup(title: "今天", items: today)) }
-        if !yesterday.isEmpty { groups.append(MeetingGroup(title: "昨天", items: yesterday)) }
-        if !earlier.isEmpty { groups.append(MeetingGroup(title: "更早", items: earlier)) }
+        if !today.isEmpty { groups.append(MeetingGroup(title: L("今天", "Today"), items: today)) }
+        if !yesterday.isEmpty { groups.append(MeetingGroup(title: L("昨天", "Yesterday"), items: yesterday)) }
+        if !earlier.isEmpty { groups.append(MeetingGroup(title: L("更早", "Earlier"), items: earlier)) }
         return groups
     }
 
@@ -616,7 +618,7 @@ private struct HomeActionCard: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(isPrimary ? AppTheme.mindMapNodeFill : Color.white.opacity(0.92))
+                    .fill(isPrimary ? AppTheme.mindMapNodeFill : AppTheme.elevatedSurface.opacity(0.92))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
@@ -735,7 +737,7 @@ private struct HomeMeetingRow: View {
             .padding(.vertical, 10)
             .background(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(isHovering ? Color.white : Color.white.opacity(0.6))
+                    .fill(isHovering ? AppTheme.elevatedSurface : AppTheme.elevatedSurface.opacity(0.62))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
@@ -851,7 +853,8 @@ private struct PasteTranscriptSheet: View {
         }
         .padding(20)
         .frame(width: 500)
-        .background(Color.white)
-        .preferredColorScheme(.light)
+        .background(AppTheme.canvasWhite)
+        .tint(AppTheme.brandPrimary)
+        .preferredColorScheme(ThemeManager.shared.preferredColorScheme)
     }
 }

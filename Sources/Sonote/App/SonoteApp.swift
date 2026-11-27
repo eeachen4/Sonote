@@ -9,6 +9,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let appState = AppState.shared
+        ThemeManager.shared.sync(with: appState.settings)
+        ThemeManager.shared.applyNSAppAppearance()
 
         appState.onShowMeetingPrompt = { [weak self] detected in
             self?.promptController.showMeetingDetected(detected, appState: appState)
@@ -78,8 +80,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
-        // Keep running quietly in the menu bar so automatic meeting detection stays active
-        false
+        // Respect General Settings: keep running quietly in menu bar by default so auto-detection stays active
+        !AppState.shared.settings.keepRunningInMenuBarOnClose
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
@@ -94,16 +96,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 struct SonoteApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var appState = AppState.shared
+    @ObservedObject private var theme = ThemeManager.shared
 
     var body: some Scene {
         Window("Sonote", id: "main") {
             MainWindowView(appState: appState)
+                .tint(AppTheme.brandPrimary)
+                .preferredColorScheme(theme.preferredColorScheme)
         }
         .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 860, height: 560)
         .commands {
             CommandGroup(after: .newItem) {
-                Button(appState.isRecordingOrPaused ? "结束并生成纪要" : "开始新录音") {
+                Button(appState.isRecordingOrPaused ? L("结束并生成纪要", "Stop & Summarize") : L("开始新录音", "Start Recording")) {
                     Task {
                         if appState.isRecordingOrPaused {
                             await appState.stopRecordingAndFinalize(generateFinalSummary: true)
@@ -114,7 +119,7 @@ struct SonoteApp: App {
                 }
                 .keyboardShortcut("r", modifiers: [.command, .shift])
 
-                Button("模拟加入会议提醒") {
+                Button(L("模拟加入会议提醒", "Simulate Meeting Prompt")) {
                     appState.triggerSimulatedMeetingPrompt()
                 }
                 .keyboardShortcut("m", modifiers: [.command, .shift])
@@ -123,6 +128,8 @@ struct SonoteApp: App {
 
         MenuBarExtra {
             MenuBarView(appState: appState)
+                .tint(AppTheme.brandPrimary)
+                .preferredColorScheme(theme.preferredColorScheme)
         } label: {
             HStack(spacing: 4) {
                 Image(systemName: appState.isRecording ? "waveform.circle.fill" : "waveform")
@@ -136,6 +143,8 @@ struct SonoteApp: App {
 
         Settings {
             SettingsView(appState: appState)
+                .tint(AppTheme.brandPrimary)
+                .preferredColorScheme(theme.preferredColorScheme)
         }
         .windowStyle(.hiddenTitleBar)
         .windowResizability(.contentSize)

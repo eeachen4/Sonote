@@ -49,7 +49,7 @@ struct TranscriptPaneView: View {
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 7)
-                .background(RoundedRectangle(cornerRadius: 8).fill(Color.white))
+                .background(RoundedRectangle(cornerRadius: 8).fill(AppTheme.elevatedSurface))
                 .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(AppTheme.subtleBorder))
                 .padding(.horizontal, 22)
                 .padding(.top, 38)
@@ -127,7 +127,7 @@ struct TranscriptPaneView: View {
                             .frame(maxHeight: 74)
                             .padding(.horizontal, 10)
                             .padding(.vertical, 6)
-                            .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.white.opacity(0.85)))
+                            .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(AppTheme.elevatedSurface.opacity(0.88)))
                             .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(AppTheme.subtleBorder, lineWidth: 1))
                         }
 
@@ -165,7 +165,7 @@ struct TranscriptPaneView: View {
                         }
                         .padding(.horizontal, 11)
                         .padding(.vertical, 7)
-                        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.white))
+                        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(AppTheme.elevatedSurface))
                         .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(AppTheme.brandPrimary.opacity(0.32), lineWidth: 1))
                     } else {
                         HStack {
@@ -186,7 +186,7 @@ struct TranscriptPaneView: View {
                                 .foregroundStyle(manualNoteLines.isEmpty ? AppTheme.textMuted : AppTheme.brandPrimary)
                                 .padding(.horizontal, 9)
                                 .padding(.vertical, 4)
-                                .background(Capsule().fill(manualNoteLines.isEmpty ? Color.white.opacity(0.75) : AppTheme.brandSoftFill))
+                                .background(Capsule().fill(manualNoteLines.isEmpty ? AppTheme.elevatedSurface.opacity(0.8) : AppTheme.brandSoftFill))
                                 .overlay(Capsule().strokeBorder(manualNoteLines.isEmpty ? AppTheme.subtleBorder : Color.clear, lineWidth: 1))
                                 .contentShape(Capsule())
                             }
@@ -264,7 +264,7 @@ struct TranscriptPaneView: View {
                     .foregroundStyle(AppTheme.textMuted)
             }
             Text(seg.text)
-                .font(.system(size: 13.5))
+                .font(.system(size: AppTheme.scaled(13.5)))
                 .foregroundStyle(AppTheme.textPrimary)
                 .lineSpacing(4)
                 .textSelection(.enabled)
