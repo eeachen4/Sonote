@@ -86,6 +86,7 @@ struct SettingsView: View {
     @State var newTemplateName: String = ""
     @State var newTemplateGuidance: String = ""
     @State var webhookTestFeedback: String? = nil
+    @State var obsidianSyncFeedback: String? = nil
     @State var includeAudioInBackup: Bool = false
     @State var backupFeedback: String? = nil
     @State var isCheckingUpdates: Bool = false

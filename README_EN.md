@@ -77,10 +77,11 @@ Download the latest `Sonote-*-arm64.dmg` from [GitHub Releases](https://github.c
 > xattr -cr /Applications/Sonote.app
 > ```
 
-### Option 2: Homebrew Cask
+### Option 2: Homebrew Cask (One-Line Install)
 ```bash
-brew install --cask ./Casks/sonote.rb
+brew install --cask eeachen4/tap/sonote
 ```
+Or install from the local formula in this repo: `brew install --cask ./Casks/sonote.rb`.
 
 ---
 
@@ -104,7 +105,7 @@ flowchart LR
 ## Highlights
 
 - **Zero-Friction Meeting Detection & Calendar Sync**: Detects active calls across Zoom, Teams, Feishu, DingTalk, Tencent Meeting, WeCom, Slack, Discord, Webex, FaceTime, and browser calls via CoreAudio (no Accessibility or full Screen Recording permission needed). Pulls meeting titles & attendee names from macOS Calendar (EventKit).
-- **Dual-Track Capture & Synced Playback**: Captures system audio via macOS 15 `CoreAudio Process Tap` + microphone via `AVAudioEngine`, handles AirPods/headset hot-swapping, saves lightweight `.m4a` audio, and supports variable-speed playback (`1x`–`2x`) synced to transcript timestamps.
+- **Dual-Track Capture & Synced Playback**: Captures system audio via macOS 15 `CoreAudio Process Tap` + microphone via `AVAudioEngine`, handles AirPods/headset hot-swapping, saves lightweight `.m4a` audio, and supports variable-speed playback (`1x`–`2x`), `±10s` skip, Spacebar play/pause, auto-scrolling active transcript highlights, in-transcript search highlighting, and inline typo editing.
 - **Full On-Device Apple Silicon MLX Audio Stack**:
   - **Qwen3-ASR (`mlx-audio-swift`)**: High-accuracy bilingual Chinese/English transcription with team glossary & calendar hotwords; auto-unloads GPU memory after meetings.
   - **Streaming Silero VAD**: 512-sample (32 ms) frame-by-frame LSTM endpointing.
@@ -116,7 +117,7 @@ flowchart LR
   - Also supports **OpenAI / Ollama / MLX Server**, **Anthropic Claude**, **Google Gemini**, and local **Codex Auth** — all secrets stored in macOS Keychain.
 - **Minimalist Craft, Adaptive Theme & Team Workflows**:
   - Live **Light / Dark / Auto** appearance, **6 accent colors**, live **English / 简体中文** interface toggle, reading font scale, and built-in GitHub release update checker.
-  - Compact floating recording capsule (`316×108`) with first-click expand, collapsible live manual notes, custom templates, tags, **Apple Reminders** sync, **Cross-Meeting AI Q&A**, **Feishu / DingTalk / Custom JSON Webhooks** (HMAC-SHA256 signed), paginated A4 PDF export, and `.zip` full-library backup & merge restore.
+  - Compact floating recording capsule (`316×108`) with first-click expand, dismissible 3-step first-launch setup guide, collapsible live manual notes, custom templates, tags, **Obsidian / Local Markdown folder auto-sync** (YAML frontmatter + in-place update by `meeting_id`), **Apple Reminders** sync, **Cross-Meeting AI Q&A**, **Feishu / DingTalk / Custom JSON Webhooks** (HMAC-SHA256 signed), paginated A4 PDF export, fast metadata index (`meetings_index.json`), and `.zip` full-library backup & merge restore.
 
 ---
 

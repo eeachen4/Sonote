@@ -217,6 +217,20 @@ extension SettingsView {
                         subtitle: L("开会时不遮挡屏幕，随时一键展开完整双栏视图", "Keep a compact floating HUD during calls with one-click expand"),
                         isOn: $appState.settings.showFloatingCapsuleWhileRecording
                     )
+
+                    Divider().overlay(AppTheme.divider)
+
+                    HStack(spacing: 12) {
+                        fieldLabel(
+                            L("新手快速设置引导", "Quick Setup Guide"),
+                            hint: L("重新在主页显示权限、本地模型与 AI 配置体检卡片", "Show the 3-step permissions, ASR & AI checklist card on Home")
+                        )
+                        Spacer()
+                        CleanSmallButton(L("重新显示引导", "Show Guide")) {
+                            appState.settings.hasCompletedOnboarding = false
+                        }
+                        .disabled(!appState.settings.hasCompletedOnboarding)
+                    }
                 }
             }
 

@@ -78,11 +78,11 @@
 > xattr -cr /Applications/Sonote.app
 > ```
 
-### 方式二：Homebrew Cask（开源 Tap）
-仓库内置 [Casks/sonote.rb](./Casks/sonote.rb)，可直接通过本地 Cask 安装：
+### 方式二：Homebrew Cask（一行安装）
 ```bash
-brew install --cask ./Casks/sonote.rb
+brew install --cask eeachen4/tap/sonote
 ```
+（也支持从本仓库本地配方安装：`brew install --cask ./Casks/sonote.rb`）
 
 ---
 
@@ -114,7 +114,7 @@ flowchart LR
 ### 2. 双轨采集、设备热插拔与音文同步回放
 - **系统远端声音 + 麦克风双轨分离**：基于 `CoreAudio Process Tap`（仅需「仅系统音频录制」权限）+ `AVAudioEngine` 独立采集，自动区分本机与远端发言并过滤外放回声。
 - **耳机热切换自动重连**：会中切换 AirPods、蓝牙耳机或外接麦克风时自动重建音频管线。
-- **轻量化混音备份与倍速回听**：录制自动保存 `.m4a`；会后支持 `1x / 1.25x / 1.5x / 2x` 倍速播放，点击任意逐字稿段落秒级跳转原声。
+- **轻量化混音备份与倍速回听**：录制自动保存 `.m4a`；会后支持 `1x / 1.25x / 1.5x / 2x` 倍速播放、`±10s` 快进后退、空格键快捷启停、逐字稿自动高亮跟随滚动、逐字稿关键词搜索高亮及双击修正错别字。
 - **本地音视频离线导入**：拖拽或选择 `.m4a / .mp3 / .wav / .mp4 / .mov` 离线转写（视频自动提取轻量化音轨）。
 
 ### 3. 全链路 Apple Silicon MLX 语音、降噪与声纹引擎
@@ -139,7 +139,8 @@ flowchart LR
 - **省 Token 增量提炼 & 超长会议 Map-Reduce**：会中增量发送新发言片段（省 60%–80% Token），超长会议自动两阶段分段汇总，按日精准统计 Token 账本。
 - **自定义模板、标签、全局待办 & 跨会议 AI 问答**：内置 5 套模板 + 自定义 Prompt；支持全局待办同步至 macOS「提醒事项」与多场会议交叉汇总。
 - **中文友好原生 GFM Markdown 渲染**：自研行内解析器彻底解决中文标点紧邻加粗/斜体/代码时的渲染错位。
-- **多渠道导出 & 全库安全迁移**：飞书卡片 / 钉钉 Markdown / Notion・n8n Webhook（含 HMAC-SHA256 验签）、富文本复制、分页 A4 PDF、Mermaid 导图，以及 `.zip` 全库无损备份恢复。
+- **多渠道导出、Obsidian 自动同步 & 全库安全迁移**：支持 **Obsidian / Logseq 本地 Markdown 目录自动同步**（自动写入带 YAML Frontmatter 的 `.md` 笔记并按 `meeting_id` 原地更新）、飞书卡片 / 钉钉 Markdown / Notion・n8n Webhook（含 HMAC-SHA256 验签）、富文本复制、分页 A4 PDF、Mermaid 导图，以及 `.zip` 全库无损备份恢复。
+- **3 步首次使用体检 & 高速元数据索引**：首次打开内置轻量引导卡片（音频权限 / 本地 MLX 预下载与国内镜像 / AI 模型速配）；底层采用 `meetings_index.json` 元数据索引，百场以上历史会议秒级检索。
 
 ---
 

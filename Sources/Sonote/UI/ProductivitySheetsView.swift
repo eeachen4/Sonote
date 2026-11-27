@@ -6,6 +6,7 @@ import SonoteCore
 
 struct GlobalActionItemsSheet: View {
     @ObservedObject var appState: AppState
+    @ObservedObject private var theme = ThemeManager.shared
     @Binding var isPresented: Bool
     var onSelectMeeting: (UUID) -> Void
 
@@ -37,10 +38,10 @@ struct GlobalActionItemsSheet: View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("全局待办清单")
+                    Text(L("全局待办清单", "Global Action Items"))
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundStyle(AppTheme.textPrimary)
-                    Text("自动聚合所有会议的行动项，支持按负责人筛选并一键同步 Apple 提醒事项")
+                    Text(L("自动聚合所有会议的行动项，支持按负责人筛选并一键同步 Apple 提醒事项", "Aggregates action items across all meetings with owner filters & Apple Reminders sync"))
                         .font(.system(size: 12))
                         .foregroundStyle(AppTheme.textSecondary)
                 }
@@ -56,7 +57,7 @@ struct GlobalActionItemsSheet: View {
                             Image(systemName: "checklist")
                                 .font(.system(size: 11.5))
                         }
-                        Text("同步到提醒事项")
+                        Text(L("同步到提醒事项", "Sync Reminders"))
                             .font(.system(size: 12, weight: .medium))
                     }
                     .foregroundStyle(.white)
@@ -84,7 +85,7 @@ struct GlobalActionItemsSheet: View {
             if let syncFeedback {
                 Text(syncFeedback)
                     .font(.system(size: 12))
-                    .foregroundStyle(syncFeedback.contains("失败") || syncFeedback.contains("未获得") ? AppTheme.recordingRed : AppTheme.brandPrimary)
+                    .foregroundStyle(syncFeedback.contains("失败") || syncFeedback.contains("未获得") || syncFeedback.lowercased().contains("failed") ? AppTheme.recordingRed : AppTheme.brandPrimary)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -93,7 +94,7 @@ struct GlobalActionItemsSheet: View {
 
             // Filter Strip
             HStack(spacing: 8) {
-                Toggle("显示已完成", isOn: $showCompleted)
+                Toggle(L("显示已完成", "Show Completed"), isOn: $showCompleted)
                     .toggleStyle(.checkbox)
                     .font(.system(size: 12))
 
@@ -101,7 +102,7 @@ struct GlobalActionItemsSheet: View {
 
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 6) {
-                        ownerChip("全部负责人", isSelected: selectedOwner == nil) {
+                        ownerChip(L("全部负责人", "All Owners"), isSelected: selectedOwner == nil) {
                             selectedOwner = nil
                         }
                         ForEach(distinctOwners, id: \.self) { owner in
@@ -120,7 +121,7 @@ struct GlobalActionItemsSheet: View {
                     Image(systemName: "checkmark.circle")
                         .font(.system(size: 28))
                         .foregroundStyle(AppTheme.textMuted)
-                    Text(showCompleted ? "暂无会议待办事项" : "太棒了，当前没有未完成的待办事项")
+                    Text(showCompleted ? L("暂无会议待办事项", "No action items yet") : L("太棒了，当前没有未完成的待办事项", "All caught up — no open action items"))
                         .font(.system(size: 13))
                         .foregroundStyle(AppTheme.textSecondary)
                 }
@@ -148,7 +149,7 @@ struct GlobalActionItemsSheet: View {
                                         .foregroundStyle(entry.item.isCompleted ? AppTheme.textSecondary : AppTheme.textPrimary)
 
                                     HStack(spacing: 8) {
-                                        if !entry.item.owner.isEmpty && entry.item.owner != "待定" {
+                                        if !entry.item.owner.isEmpty && entry.item.owner != "待定" && entry.item.owner != "TBD" {
                                             Text(entry.item.owner)
                                                 .font(.system(size: 11, weight: .medium))
                                                 .foregroundStyle(AppTheme.brandPrimary)
@@ -157,7 +158,7 @@ struct GlobalActionItemsSheet: View {
                                                 .background(Capsule().fill(AppTheme.brandSoftFill))
                                         }
                                         if !entry.item.dueDate.isEmpty {
-                                            Text("截止 \(entry.item.dueDate)")
+                                            Text(L("截止 \(entry.item.dueDate)", "Due \(entry.item.dueDate)"))
                                                 .font(.system(size: 11))
                                                 .foregroundStyle(AppTheme.textSecondary)
                                         }
@@ -165,7 +166,7 @@ struct GlobalActionItemsSheet: View {
                                             isPresented = false
                                             onSelectMeeting(entry.meetingID)
                                         } label: {
-                                            Text("来自：\(entry.meetingTitle)")
+                                            Text(L("来自：\(entry.meetingTitle)", "From: \(entry.meetingTitle)"))
                                                 .font(.system(size: 11))
                                                 .foregroundStyle(AppTheme.textMuted)
                                                 .lineLimit(1)
@@ -188,7 +189,7 @@ struct GlobalActionItemsSheet: View {
         .frame(width: 620, height: 480)
         .background(AppTheme.canvasWhite)
         .tint(AppTheme.brandPrimary)
-        .preferredColorScheme(ThemeManager.shared.preferredColorScheme)
+        .preferredColorScheme(theme.preferredColorScheme)
     }
 
     private func ownerChip(_ title: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
@@ -217,6 +218,7 @@ struct GlobalActionItemsSheet: View {
 
 struct CrossMeetingAskAISheet: View {
     @ObservedObject var appState: AppState
+    @ObservedObject private var theme = ThemeManager.shared
     @Binding var isPresented: Bool
 
     @State private var selectedIDs: Set<UUID> = []
@@ -226,21 +228,23 @@ struct CrossMeetingAskAISheet: View {
     @State private var isAsking: Bool = false
     @State private var copiedAnswer: Bool = false
 
-    private let quickQuestions: [(label: String, prompt: String)] = [
-        ("汇总阶段周报", "请综合选中的多场会议，按时间线和模块提炼一份结构清晰的阶段工作周报/月报。"),
-        ("对比未闭环阻塞项", "请对比这些会议中反复提到的风险、问题与未闭环阻塞项，整理成表格并标明当前责任人。"),
-        ("合并全部决议与待办", "请将选中会议中的全部关键决议与待办事项去重合并，按负责人分组列出。")
-    ]
+    private var quickQuestions: [(label: String, prompt: String)] {
+        [
+            (L("汇总阶段周报", "Weekly Digest"), L("请综合选中的多场会议，按时间线和模块提炼一份结构清晰的阶段工作周报/月报。", "Synthesize the selected meetings into a clear chronological weekly/period status report grouped by workstream.")),
+            (L("对比未闭环阻塞项", "Compare Blockers"), L("请对比这些会议中反复提到的风险、问题与未闭环阻塞项，整理成表格并标明当前责任人。", "Compare recurring risks, issues, and open blockers across these meetings in a table with current owners.")),
+            (L("合并全部决议与待办", "Merge Decisions & Tasks"), L("请将选中会议中的全部关键决议与待办事项去重合并，按负责人分组列出。", "Deduplicate and merge all key decisions and action items from the selected meetings, grouped by owner."))
+        ]
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             // Header
             HStack {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("跨会议 AI 问答与汇总")
+                    Text(L("跨会议 AI 问答与汇总", "Cross-Meeting AI Q&A"))
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundStyle(AppTheme.textPrimary)
-                    Text("勾选多场会议（或按标签一键全选），对比阻塞项进展、生成跨周汇报")
+                    Text(L("勾选多场会议（或按标签一键全选），对比阻塞项进展、生成跨周汇报", "Select multiple meetings (or filter by tag) to compare blockers and draft cross-week reports"))
                         .font(.system(size: 12))
                         .foregroundStyle(AppTheme.textSecondary)
                 }
@@ -262,11 +266,11 @@ struct CrossMeetingAskAISheet: View {
                 // Left: Meeting Selector
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
-                        Text("选择会议（已选 \(selectedIDs.count)）")
+                        Text(L("选择会议（已选 \(selectedIDs.count)）", "Meetings (\(selectedIDs.count) selected)"))
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundStyle(AppTheme.textSecondary)
                         Spacer()
-                        Button(selectedIDs.count == appState.meetings.count ? "取消全选" : "全选最近5场") {
+                        Button(selectedIDs.count == appState.meetings.count ? L("取消全选", "Clear") : L("全选最近5场", "Latest 5")) {
                             if selectedIDs.count == appState.meetings.count {
                                 selectedIDs.removeAll()
                             } else {
@@ -365,7 +369,7 @@ struct CrossMeetingAskAISheet: View {
                     ScrollView {
                         VStack(alignment: .leading, spacing: 10) {
                             if answerText.isEmpty && !isAsking {
-                                Text("在左侧勾选 2 场或以上会议，然后点击上方快捷指令或直接输入问题。")
+                                Text(L("在左侧勾选 2 场或以上会议，然后点击上方快捷指令或直接输入问题。", "Select 2 or more meetings on the left, then pick a quick prompt or ask a question below."))
                                     .font(.system(size: 13))
                                     .foregroundStyle(AppTheme.textMuted)
                                     .padding(.top, 24)
@@ -373,7 +377,7 @@ struct CrossMeetingAskAISheet: View {
                                 if isAsking && answerText.isEmpty {
                                     HStack(spacing: 8) {
                                         ProgressView().controlSize(.small)
-                                        Text("正在综合分析 \(selectedIDs.count) 场会议...")
+                                        Text(L("正在综合分析 \(selectedIDs.count) 场会议...", "Analyzing \(selectedIDs.count) meetings..."))
                                             .font(.system(size: 13))
                                             .foregroundStyle(AppTheme.textSecondary)
                                     }
@@ -392,7 +396,7 @@ struct CrossMeetingAskAISheet: View {
                     if !answerText.isEmpty && !isAsking {
                         HStack {
                             if let usage = lastUsage, !usage.isEmpty {
-                                Text("本次消耗 \(usage.formattedCompact) tokens（\(usage.detailedSummary)）")
+                                Text(L("本次消耗 \(usage.formattedCompact) tokens（\(usage.detailedSummary)）", "Used \(usage.formattedCompact) tokens (\(usage.detailedSummary))"))
                                     .font(.system(size: 11))
                                     .foregroundStyle(AppTheme.textMuted)
                             }
@@ -403,7 +407,7 @@ struct CrossMeetingAskAISheet: View {
                                 copiedAnswer = true
                                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { copiedAnswer = false }
                             } label: {
-                                Label(copiedAnswer ? "已复制" : "复制 Markdown", systemImage: "doc.on.doc")
+                                Label(copiedAnswer ? L("已复制", "Copied") : L("复制 Markdown", "Copy Markdown"), systemImage: "doc.on.doc")
                                     .font(.system(size: 11.5))
                                     .foregroundStyle(AppTheme.brandPrimary)
                             }
@@ -413,7 +417,7 @@ struct CrossMeetingAskAISheet: View {
 
                     // Input Bar
                     HStack(spacing: 8) {
-                        TextField("例如：对比过去三周研发周会里性能优化任务的推进进展...", text: $questionDraft)
+                        TextField(L("例如：对比过去三周研发周会里性能优化任务的推进进展...", "e.g., Compare performance milestone progress across the last 3 engineering syncs..."), text: $questionDraft)
                             .textFieldStyle(.plain)
                             .font(.system(size: 13))
                             .onSubmit {
@@ -428,7 +432,7 @@ struct CrossMeetingAskAISheet: View {
                             questionDraft = ""
                             runQuestion(q)
                         } label: {
-                            Text(isAsking ? "分析中..." : "提问")
+                            Text(isAsking ? L("分析中...", "Analyzing...") : L("提问", "Ask"))
                                 .font(.system(size: 12, weight: .medium))
                                 .foregroundStyle(.white)
                                 .padding(.horizontal, 14)
@@ -450,7 +454,7 @@ struct CrossMeetingAskAISheet: View {
         .frame(width: 780, height: 540)
         .background(AppTheme.canvasWhite)
         .tint(AppTheme.brandPrimary)
-        .preferredColorScheme(ThemeManager.shared.preferredColorScheme)
+        .preferredColorScheme(theme.preferredColorScheme)
         .onAppear {
             if selectedIDs.isEmpty {
                 selectedIDs = Set(appState.meetings.prefix(3).map(\.id))

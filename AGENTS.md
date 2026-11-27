@@ -95,23 +95,31 @@ Sonote/
 │   │       │   ├── AuthManager.swift              # Credential resolution across all providers
 │   │       │   └── KeychainStore.swift            # macOS Keychain (com.sonote.app + legacy fallback)
 │   │       ├── Storage/
-│   │       │   ├── MeetingStore.swift             # JSON persistence + non-destructive TTMinutes migration
+│   │       │   ├── MeetingStore.swift             # JSON persistence + meetings_index.json + TTMinutes migration
 │   │       │   └── ArchiveBackupService.swift     # .zip full-library backup & merge restore
 │   │       ├── Detection/MeetingDetector.swift    # CoreAudio process-level meeting auto-detection
 │   │       ├── Calendar/CalendarContextService.swift # EventKit title & attendee hotwords
-│   │       ├── Export/WebhookPushService.swift    # Feishu / DingTalk / custom JSON HMAC-SHA256 webhooks
+│   │       ├── Export/
+│   │       │   ├── WebhookPushService.swift       # Feishu / DingTalk / custom JSON HMAC-SHA256 webhooks
+│   │       │   └── MarkdownFolderSyncService.swift# Obsidian / Logseq YAML frontmatter .md auto-sync
 │   │       ├── Markdown/MarkdownParser.swift      # CJK-safe inline/block GFM Markdown parser
 │   │       └── System/                            # GlobalHotKeyService (Carbon), LaunchAtLogin, UpdateChecker
 │   └── Sonote/                             # Native macOS SwiftUI application target
 │       ├── App/
 │       │   ├── SonoteApp.swift             # App entry, Window/MenuBarExtra/Settings scenes, AppDelegate
-│       │   ├── AppState.swift              # Central @MainActor ObservableObject coordinator
+│       │   ├── AppState.swift              # Core @MainActor state, detector & storage mutations
+│       │   ├── AppState+Recording.swift    # Recording lifecycle, timers & floating capsule controls
+│       │   ├── AppState+MinutesAI.swift    # Live/final AI summary, Obsidian auto-sync & Ask AI
+│       │   ├── AppState+VoiceprintsAndImport.swift # Media import, diarization & voiceprint enrollment
+│       │   ├── AppState+Integrations.swift # Tags, Reminders, Webhooks, Obsidian sync, Backup & MLX
 │       │   ├── MeetingAudioPlayer.swift    # Variable-speed playback synced to transcript timestamps
 │       │   └── MeetingPDFExporter.swift    # Paginated A4 PDF renderer
 │       └── UI/
 │           ├── Theme.swift                 # ThemeManager + adaptive Light/Dark AppTheme + L("zh", "en")
 │           ├── MainWindowView.swift        # Home dashboard & navigation shell
+│           ├── OnboardingCardView.swift    # Dismissible 3-step first-launch setup checklist
 │           ├── MeetingWorkspaceView.swift  # Post-meeting document + live 2-column split workspace
+│           ├── Workspace/                  # Modular document sections (Transcript, AskAI, Audio/Popovers)
 │           ├── SmartMinutesPaneView.swift  # Summary, Mind-Map, Action Items, Ask AI
 │           ├── TranscriptPaneView.swift    # Dual-track speaker transcript + inline speaker rename
 │           ├── FloatingPanels.swift        # Non-activating HUD prompts & compact floating recording capsule

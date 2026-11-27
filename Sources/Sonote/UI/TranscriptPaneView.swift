@@ -6,6 +6,7 @@ import SonoteCore
 struct TranscriptPaneView: View {
     let meeting: MeetingSession
     @ObservedObject var appState: AppState
+    @ObservedObject private var theme = ThemeManager.shared
 
     @State private var showQuickNoteInput = false
     @State private var quickNoteDraft = ""
@@ -40,7 +41,7 @@ struct TranscriptPaneView: View {
                         .foregroundStyle(AppTheme.textSecondary)
                         .lineLimit(1)
                     Spacer()
-                    Button("授权") {
+                    Button(L("授权", "Grant")) {
                         appState.openPrivacySettings("Privacy_AudioCapture")
                     }
                     .buttonStyle(.plain)
@@ -132,7 +133,7 @@ struct TranscriptPaneView: View {
                         }
 
                         HStack(spacing: 6) {
-                            TextField("随手记要点/人名/待办，回车融入纪要...", text: $quickNoteDraft)
+                            TextField(L("随手记要点/人名/待办，回车融入纪要...", "Jot key points, names, or tasks (Enter to save)..."), text: $quickNoteDraft)
                                 .textFieldStyle(.plain)
                                 .font(.system(size: 12))
                                 .foregroundStyle(AppTheme.textPrimary)
@@ -161,7 +162,7 @@ struct TranscriptPaneView: View {
                                     .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
-                            .help("收起随手记")
+                            .help(L("收起随手记", "Collapse Quick Notes"))
                         }
                         .padding(.horizontal, 11)
                         .padding(.vertical, 7)
@@ -180,7 +181,7 @@ struct TranscriptPaneView: View {
                                 HStack(spacing: 5) {
                                     Image(systemName: "square.and.pencil")
                                         .font(.system(size: 11))
-                                    Text(manualNoteLines.isEmpty ? "随手记" : "随手记 (\(manualNoteLines.count))")
+                                    Text(manualNoteLines.isEmpty ? L("随手记", "Quick Notes") : L("随手记 (\(manualNoteLines.count))", "Notes (\(manualNoteLines.count))"))
                                         .font(.system(size: 11.5))
                                 }
                                 .foregroundStyle(manualNoteLines.isEmpty ? AppTheme.textMuted : AppTheme.brandPrimary)
@@ -191,7 +192,7 @@ struct TranscriptPaneView: View {
                                 .contentShape(Capsule())
                             }
                             .buttonStyle(.plain)
-                            .help("记录会议重点，AI 提炼纪要时将高优先级参考")
+                            .help(L("记录会议重点，AI 提炼纪要时将高优先级参考", "Jot notes — AI prioritizes them in your minutes"))
                             Spacer()
                         }
                     }
@@ -228,7 +229,7 @@ struct TranscriptPaneView: View {
                             .background(Capsule().fill(AppTheme.brandSoftFill))
                     }
                     .buttonStyle(.plain)
-                    .help(appState.isPaused ? "继续记录" : "暂停记录")
+                    .help(appState.isPaused ? L("继续记录", "Resume Recording") : L("暂停记录", "Pause Recording"))
 
                     Spacer()
 
@@ -243,7 +244,7 @@ struct TranscriptPaneView: View {
                             .background(Capsule().fill(AppTheme.neutralPill))
                     }
                     .buttonStyle(.plain)
-                    .help("结束录音并生成总结")
+                    .help(L("结束录音并生成总结", "Stop & Summarize"))
                 }
             }
             .padding(.horizontal, 26)
@@ -280,7 +281,7 @@ struct TranscriptPaneView: View {
 
     private func volatileLine(speaker: SpeakerSource, text: String) -> some View {
         let localName = appState.settings.localUserName.trimmingCharacters(in: .whitespacesAndNewlines)
-        let label = speaker == .me ? (localName.isEmpty ? "我" : localName) : "发言人"
+        let label = speaker == .me ? (localName.isEmpty ? L("我", "Me") : localName) : L("发言人", "Speaker")
         return VStack(alignment: .leading, spacing: 3) {
             Text(label)
                 .font(.system(size: 12, weight: .medium))

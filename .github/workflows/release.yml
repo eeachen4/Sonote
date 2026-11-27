@@ -41,16 +41,20 @@ jobs:
             -derivedDataPath .build/xcode-release
 
       - name: Import Apple Developer ID Certificate (Optional)
-        if: ${{ secrets.MACOS_CERT_P12_BASE64 != '' }}
         env:
           CERT_BASE64: ${{ secrets.MACOS_CERT_P12_BASE64 }}
           CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
-          KEYCHAIN_PASSWORD: ${{ secrets.MACOS_KEYCHAIN_PASSWORD || 'sonote-ci-keychain' }}
+          KEYCHAIN_PASSWORD: ${{ secrets.MACOS_KEYCHAIN_PASSWORD }}
         run: |
+          if [[ -z "${CERT_BASE64}" ]]; then
+            echo "No Developer ID certificate configured; proceeding with self-signed build."
+            exit 0
+          fi
+          KC_PASS="${KEYCHAIN_PASSWORD:-sonote-ci-keychain}"
           KEYCHAIN_PATH="$RUNNER_TEMP/sonote-signing.keychain-db"
-          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security create-keychain -p "$KC_PASS" "$KEYCHAIN_PATH"
           security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
-          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KC_PASS" "$KEYCHAIN_PATH"
           echo "$CERT_BASE64" | base64 --decode > "$RUNNER_TEMP/cert.p12"
           security import "$RUNNER_TEMP/cert.p12" -P "$CERT_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
           security list-keychain -d user -s "$KEYCHAIN_PATH"
@@ -58,19 +62,23 @@ jobs:
 
       - name: Build Signed App & Package DMG
         env:
-          SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY || '-' }}
+          MACOS_SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
         run: |
+          export SIGN_IDENTITY="${MACOS_SIGN_IDENTITY:--}"
           chmod +x scripts/build_app.sh scripts/package_dmg.sh
           ./scripts/build_app.sh
           ./scripts/package_dmg.sh
 
       - name: Notarize & Staple DMG (Optional)
-        if: ${{ secrets.APPLE_NOTARY_APPLE_ID != '' && secrets.APPLE_NOTARY_TEAM_ID != '' && secrets.APPLE_NOTARY_PASSWORD != '' }}
         env:
           APPLE_ID: ${{ secrets.APPLE_NOTARY_APPLE_ID }}
           TEAM_ID: ${{ secrets.APPLE_NOTARY_TEAM_ID }}
           APP_PASSWORD: ${{ secrets.APPLE_NOTARY_PASSWORD }}
         run: |
+          if [[ -z "${APPLE_ID}" || -z "${TEAM_ID}" || -z "${APP_PASSWORD}" ]]; then
+            echo "Apple notarization credentials not configured; skipping notarization."
+            exit 0
+          fi
           DMG_PATH=$(ls dist/Sonote-*-arm64.dmg | head -n 1)
           xcrun notarytool submit "$DMG_PATH" \
             --apple-id "$APPLE_ID" \

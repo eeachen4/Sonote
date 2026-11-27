@@ -217,6 +217,13 @@ struct MainWindowView: View {
                         }
                         .padding(.top, 14)
 
+                        // First-Launch 3-Step Onboarding Card (dismissible)
+                        if !appState.settings.hasCompletedOnboarding {
+                            OnboardingCardView(appState: appState) {
+                                openSettings()
+                            }
+                        }
+
                         // Three Clean Primary Action Cards
                         HStack(spacing: 12) {
                             HomeActionCard(
@@ -362,7 +369,7 @@ struct MainWindowView: View {
                             Image(systemName: "waveform.badge.plus")
                                 .font(.system(size: 28, weight: .semibold))
                                 .foregroundStyle(AppTheme.brandPrimary)
-                            Text("松手即可离线转写该音视频并生成纪要")
+                            Text(L("松手即可离线转写该音视频并生成纪要", "Drop to transcribe offline and generate minutes"))
                                 .font(.system(size: 14, weight: .semibold))
                                 .foregroundStyle(AppTheme.textPrimary)
                         }
@@ -397,7 +404,7 @@ struct MainWindowView: View {
 
     private func pickAndImportMediaFile() {
         let panel = NSOpenPanel()
-        panel.title = "选择本地音频或视频文件（离线 Qwen3-ASR 转写）"
+        panel.title = L("选择本地音频或视频文件（离线 Qwen3-ASR 转写）", "Select Local Audio or Video File (Offline Qwen3-ASR)")
         panel.allowsMultipleSelection = false
         panel.canChooseDirectories = false
         panel.allowedContentTypes = [.audio, .mpeg4Audio, .mp3, .wav, .mpeg4Movie, .quickTimeMovie, .movie]
@@ -435,14 +442,14 @@ struct MainWindowView: View {
         } label: {
             HStack(spacing: 10) {
                 RecordingPulseDot(isActive: appState.isRecording, isPaused: appState.isPaused)
-                Text("正在记录「\(active.title)」")
+                Text(L("正在记录「\(active.title)」", "Recording \"\(active.title)\""))
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(AppTheme.textPrimary)
                 Text(active.formattedDuration)
                     .font(.system(size: 12.5, design: .monospaced))
                     .foregroundStyle(AppTheme.brandPrimary)
                 Spacer()
-                Text("返回实时窗口")
+                Text(L("返回实时窗口", "Return to Live View"))
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(AppTheme.brandPrimary)
                 Image(systemName: "chevron.right")
@@ -458,18 +465,18 @@ struct MainWindowView: View {
 
     private var emptyMeetingsCard: some View {
         VStack(spacing: 10) {
-            Text(searchText.isEmpty ? "还没有会议记录" : "没有找到匹配的会议记录")
+            Text(searchText.isEmpty ? L("还没有会议记录", "No meetings yet") : L("没有找到匹配的会议记录", "No matching meetings found"))
                 .font(.system(size: 13.5, weight: .medium))
                 .foregroundStyle(AppTheme.textSecondary)
 
             if searchText.isEmpty {
                 HStack(spacing: 12) {
-                    Text("加入线上会议会自动弹窗提醒，或点击上方「开始新录音」立即记录")
+                    Text(L("加入线上会议会自动弹窗提醒，或点击上方「开始新录音」立即记录", "Joining a call triggers an auto-prompt, or click \"Start Recording\" above"))
                         .font(.system(size: 12))
                         .foregroundStyle(AppTheme.textMuted)
                 }
 
-                Button("查看一份示例会议纪要") {
+                Button(L("查看一份示例会议纪要", "Load a Sample Meeting")) {
                     appState.createSampleMeetingForDemo()
                 }
                 .buttonStyle(.plain)
@@ -503,7 +510,7 @@ struct MainWindowView: View {
     }
 
     private var activeModelBadge: String {
-        guard appState.authInspection.isValid else { return "未配置 AI" }
+        guard appState.authInspection.isValid else { return L("未配置 AI", "AI Not Configured") }
         switch appState.settings.authMode {
         case .localAuthFile:
             let m = appState.settings.codexModel.isEmpty ? "Codex Auth" : appState.settings.codexModel
@@ -530,7 +537,7 @@ struct MainWindowView: View {
             return "Gemini · \(m)"
         case .localMLX:
             let m = appState.settings.localMLXLLMModelID.split(separator: "/").last.map(String.init) ?? "Qwen2.5"
-            return "离线 · \(m)"
+            return "\(L("离线", "Offline")) · \(m)"
         }
     }
 
@@ -664,6 +671,7 @@ private struct HomeMeetingRow: View {
     let onCopy: () -> Void
     let onDelete: () -> Void
 
+    @ObservedObject private var theme = ThemeManager.shared
     @State private var isHovering = false
 
     var body: some View {
@@ -686,7 +694,7 @@ private struct HomeMeetingRow: View {
                             .lineLimit(1)
 
                         if isRecording {
-                            Text("录音中")
+                            Text(L("录音中", "Live"))
                                 .font(.system(size: 10.5, weight: .medium))
                                 .foregroundStyle(AppTheme.brandPrimary)
                                 .padding(.horizontal, 6)
@@ -722,7 +730,7 @@ private struct HomeMeetingRow: View {
                                 .background(Circle().fill(AppTheme.neutralPill))
                         }
                         .buttonStyle(.plain)
-                        .help("复制 Markdown 纪要")
+                        .help(L("复制 Markdown 纪要", "Copy Markdown Minutes"))
 
                         Button(action: onDelete) {
                             Image(systemName: "trash")
@@ -732,7 +740,7 @@ private struct HomeMeetingRow: View {
                                 .background(Circle().fill(AppTheme.neutralPill))
                         }
                         .buttonStyle(.plain)
-                        .help("删除记录")
+                        .help(L("删除记录", "Delete Meeting"))
                     }
                 } else {
                     VStack(alignment: .trailing, spacing: 2) {
@@ -740,7 +748,7 @@ private struct HomeMeetingRow: View {
                             .font(.system(size: 11.5))
                             .foregroundStyle(AppTheme.textSecondary)
                         HStack(spacing: 5) {
-                            Text(meeting.duration > 0 ? meeting.chineseDurationText : meeting.sourceAppName)
+                            Text(meeting.duration > 0 ? (theme.isEnglish ? meeting.formattedDuration : meeting.chineseDurationText) : meeting.sourceAppName)
                             if !meeting.tokenUsage.isEmpty {
                                 Text("· \(meeting.tokenUsage.formattedCompact)t")
                             }
@@ -765,9 +773,9 @@ private struct HomeMeetingRow: View {
         .buttonStyle(.plain)
         .onHover { isHovering = $0 }
         .contextMenu {
-            Button("复制 Markdown 纪要", action: onCopy)
+            Button(L("复制 Markdown 纪要", "Copy Markdown Minutes"), action: onCopy)
             Divider()
-            Button("删除记录", role: .destructive, action: onDelete)
+            Button(L("删除记录", "Delete Meeting"), role: .destructive, action: onDelete)
         }
     }
 
@@ -789,7 +797,7 @@ private struct HomeMeetingRow: View {
         if let firstSeg = meeting.segments.first {
             return firstSeg.text
         }
-        return "未识别到文字内容"
+        return L("未识别到文字内容", "No transcript content")
     }
 
     private func shortTime(_ date: Date) -> String {
@@ -803,6 +811,7 @@ private struct HomeMeetingRow: View {
 
 private struct PasteTranscriptSheet: View {
     @ObservedObject var appState: AppState
+    @ObservedObject private var theme = ThemeManager.shared
     @Binding var isPresented: Bool
 
     @State private var title: String = ""
@@ -811,7 +820,7 @@ private struct PasteTranscriptSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
-                Text("粘贴文本生成智能纪要")
+                Text(L("粘贴文本生成智能纪要", "Generate Minutes from Text"))
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(AppTheme.textPrimary)
                 Spacer()
@@ -825,7 +834,7 @@ private struct PasteTranscriptSheet: View {
                 .buttonStyle(.plain)
             }
 
-            TextField("会议主题（留空由 GPT 自动命名）", text: $title)
+            TextField(L("会议主题（留空由 AI 自动命名）", "Meeting title (optional — AI can name it)"), text: $title)
                 .textFieldStyle(.plain)
                 .font(.system(size: 13.5))
                 .padding(.horizontal, 12)
@@ -841,11 +850,11 @@ private struct PasteTranscriptSheet: View {
                 .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(AppTheme.subtleBorder))
 
             HStack {
-                Text("支持直接粘贴逐字稿、聊天讨论或零散笔记")
+                Text(L("支持直接粘贴逐字稿、聊天讨论或零散笔记", "Paste transcripts, chat threads, or rough notes"))
                     .font(.system(size: 11.5))
                     .foregroundStyle(AppTheme.textSecondary)
                 Spacer()
-                Button("取消") { isPresented = false }
+                Button(L("取消", "Cancel")) { isPresented = false }
                     .buttonStyle(.plain)
                     .font(.system(size: 12.5))
                     .foregroundStyle(AppTheme.textSecondary)
@@ -857,7 +866,7 @@ private struct PasteTranscriptSheet: View {
                     isPresented = false
                     Task { await appState.createMeetingFromPastedText(title: t, rawText: body) }
                 } label: {
-                    Text("生成智能纪要")
+                    Text(L("生成智能纪要", "Generate Minutes"))
                         .font(.system(size: 12.5, weight: .semibold))
                         .foregroundStyle(.white)
                         .padding(.horizontal, 16)
@@ -872,7 +881,7 @@ private struct PasteTranscriptSheet: View {
         .frame(width: 500)
         .background(AppTheme.canvasWhite)
         .tint(AppTheme.brandPrimary)
-        .preferredColorScheme(ThemeManager.shared.preferredColorScheme)
+        .preferredColorScheme(theme.preferredColorScheme)
     }
 }
 

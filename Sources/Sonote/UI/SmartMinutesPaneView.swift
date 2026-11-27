@@ -6,6 +6,7 @@ import SonoteCore
 struct SmartMinutesPaneView: View {
     let meeting: MeetingSession
     @ObservedObject var appState: AppState
+    @ObservedObject private var theme = ThemeManager.shared
 
     enum SummaryDisplayMode: String, CaseIterable {
         case mindMap
@@ -18,7 +19,7 @@ struct SmartMinutesPaneView: View {
         VStack(alignment: .leading, spacing: 0) {
             // Minimal Header: "实时总结" + [ ⎇ | ≡ ] toggle pill
             HStack {
-                Text("实时总结")
+                Text(L("实时总结", "Live Summary"))
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(AppTheme.textPrimary)
 
@@ -42,13 +43,13 @@ struct SmartMinutesPaneView: View {
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    .help("立即更新实时总结")
+                    .help(L("立即更新实时总结", "Refresh Live Summary"))
                 }
 
                 // Exact Doubao-style segmented view mode toggle (Mind-Map vs Outline)
                 HStack(spacing: 2) {
-                    modeToggleButton(icon: "arrow.branch", mode: .mindMap, help: "思维导图视图")
-                    modeToggleButton(icon: "list.bullet", mode: .outline, help: "大纲列表视图")
+                    modeToggleButton(icon: "arrow.branch", mode: .mindMap, help: L("思维导图视图", "Mind-Map View"))
+                    modeToggleButton(icon: "list.bullet", mode: .outline, help: L("大纲列表视图", "Outline View"))
                 }
                 .padding(3)
                 .background(
@@ -72,7 +73,7 @@ struct SmartMinutesPaneView: View {
                             .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                     }
                     .buttonStyle(.plain)
-                    .help("收起为屏幕左上角悬浮小窗")
+                    .help(L("收起为屏幕左上角悬浮小窗", "Collapse to Floating Capsule"))
                 }
             }
             .padding(.horizontal, 26)
@@ -190,9 +191,9 @@ struct SmartMinutesPaneView: View {
             return appState.mlxModelState.statusText
         }
         if appState.isGeneratingMinutes {
-            return "正在提炼会议核心要点..."
+            return L("正在提炼会议核心要点...", "Synthesizing key takeaways...")
         }
-        return "正在识别说话人和讨论内容..."
+        return L("正在识别说话人和讨论内容...", "Listening for speakers and discussion...")
     }
 }
 
@@ -201,6 +202,7 @@ struct SmartMinutesPaneView: View {
 struct DoubaoMindMapView: View {
     let meeting: MeetingSession
     @ObservedObject var appState: AppState
+    @ObservedObject private var theme = ThemeManager.shared
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -221,7 +223,7 @@ struct DoubaoMindMapView: View {
                 // Child branches connected by clean vertical spine
                 VStack(alignment: .leading, spacing: 14) {
                     if !meeting.minutes.overview.isEmpty {
-                        mindMapBranch(title: "会议概览", items: [meeting.minutes.overview])
+                        mindMapBranch(title: L("会议概览", "Overview"), items: [meeting.minutes.overview])
                     }
 
                     ForEach(meeting.minutes.topics) { topic in
@@ -229,7 +231,7 @@ struct DoubaoMindMapView: View {
                     }
 
                     if !meeting.minutes.decisions.isEmpty {
-                        mindMapBranch(title: "关键决议", items: meeting.minutes.decisions)
+                        mindMapBranch(title: L("关键决议", "Key Decisions"), items: meeting.minutes.decisions)
                     }
 
                     if !meeting.minutes.actionItems.isEmpty {
@@ -237,7 +239,7 @@ struct DoubaoMindMapView: View {
                     }
 
                     if !meeting.minutes.openQuestions.isEmpty {
-                        mindMapBranch(title: "待确认问题", items: meeting.minutes.openQuestions)
+                        mindMapBranch(title: L("待确认问题", "Open Questions"), items: meeting.minutes.openQuestions)
                     }
                 }
                 .padding(.leading, 18)
@@ -296,7 +298,7 @@ struct DoubaoMindMapView: View {
                 Rectangle()
                     .fill(AppTheme.mindMapLine)
                     .frame(width: 12, height: 1.5)
-                Text("待办事项")
+                Text(L("待办事项", "Action Items"))
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(AppTheme.textPrimary)
                     .padding(.horizontal, 12)
@@ -346,6 +348,7 @@ struct DoubaoMindMapView: View {
 struct DoubaoOutlineMinutesView: View {
     let meeting: MeetingSession
     @ObservedObject var appState: AppState
+    @ObservedObject private var theme = ThemeManager.shared
     var isEditing: Bool = false
 
     @State private var newActionTask: String = ""
@@ -358,7 +361,7 @@ struct DoubaoOutlineMinutesView: View {
                 MarkdownContentView(markdown: fallback, fontSize: 13.5)
             } else {
                 if !meeting.minutes.overview.isEmpty || isEditing {
-                    outlineSection("摘要") {
+                    outlineSection(L("摘要", "Summary")) {
                         if isEditing {
                             TextEditor(text: Binding(
                                 get: { meeting.minutes.overview },
@@ -380,12 +383,12 @@ struct DoubaoOutlineMinutesView: View {
                 }
 
                 if !meeting.minutes.topics.isEmpty {
-                    outlineSection("核心要点") {
+                    outlineSection(L("核心要点", "Key Topics")) {
                         VStack(alignment: .leading, spacing: 14) {
                             ForEach(Array(meeting.minutes.topics.enumerated()), id: \.element.id) { tIdx, topic in
                                 VStack(alignment: .leading, spacing: 6) {
                                     if isEditing {
-                                        TextField("议题标题", text: Binding(
+                                        TextField(L("议题标题", "Topic title"), text: Binding(
                                             get: { topic.title },
                                             set: { val in
                                                 appState.updateMeeting(id: meeting.id) { m in
@@ -406,7 +409,7 @@ struct DoubaoOutlineMinutesView: View {
                                             Text("•")
                                                 .foregroundStyle(AppTheme.textSecondary)
                                             if isEditing {
-                                                TextField("要点内容", text: Binding(
+                                                TextField(L("要点内容", "Key point"), text: Binding(
                                                     get: { point },
                                                     set: { val in
                                                         appState.updateMeeting(id: meeting.id) { m in
@@ -434,14 +437,14 @@ struct DoubaoOutlineMinutesView: View {
                 }
 
                 if !meeting.minutes.decisions.isEmpty {
-                    outlineSection("会议决议") {
+                    outlineSection(L("会议决议", "Decisions")) {
                         VStack(alignment: .leading, spacing: 7) {
                             ForEach(Array(meeting.minutes.decisions.enumerated()), id: \.offset) { dIdx, decision in
                                 HStack(alignment: .top, spacing: 8) {
                                     Text("•")
                                         .foregroundStyle(AppTheme.brandPrimary)
                                     if isEditing {
-                                        TextField("决议内容", text: Binding(
+                                        TextField(L("决议内容", "Decision"), text: Binding(
                                             get: { decision },
                                             set: { val in
                                                 appState.updateMeeting(id: meeting.id) { m in
@@ -465,7 +468,7 @@ struct DoubaoOutlineMinutesView: View {
                 }
 
                 if !meeting.minutes.actionItems.isEmpty || isEditing {
-                    outlineSection("待办事项") {
+                    outlineSection(L("待办事项", "Action Items")) {
                         VStack(alignment: .leading, spacing: 8) {
                             ForEach(Array(meeting.minutes.actionItems.enumerated()), id: \.element.id) { aIdx, item in
                                 HStack(alignment: .top, spacing: 8) {
@@ -481,7 +484,7 @@ struct DoubaoOutlineMinutesView: View {
 
                                     if isEditing {
                                         HStack(spacing: 6) {
-                                            TextField("待办事项", text: Binding(
+                                            TextField(L("待办事项", "Task"), text: Binding(
                                                 get: { item.task },
                                                 set: { val in
                                                     appState.updateMeeting(id: meeting.id) { m in
@@ -492,7 +495,7 @@ struct DoubaoOutlineMinutesView: View {
                                             .textFieldStyle(.roundedBorder)
                                             .font(.system(size: 12.5))
 
-                                            TextField("负责人", text: Binding(
+                                            TextField(L("负责人", "Owner"), text: Binding(
                                                 get: { item.owner },
                                                 set: { val in
                                                     appState.updateMeeting(id: meeting.id) { m in
@@ -504,7 +507,7 @@ struct DoubaoOutlineMinutesView: View {
                                             .font(.system(size: 12))
                                             .frame(width: 72)
 
-                                            TextField("截止时间", text: Binding(
+                                            TextField(L("截止时间", "Due"), text: Binding(
                                                 get: { item.dueDate },
                                                 set: { val in
                                                     appState.updateMeeting(id: meeting.id) { m in
@@ -533,7 +536,7 @@ struct DoubaoOutlineMinutesView: View {
                                                 .strikethrough(item.isCompleted, color: AppTheme.textMuted)
                                                 .foregroundStyle(item.isCompleted ? AppTheme.textSecondary : AppTheme.textPrimary)
                                                 .textSelection(.enabled)
-                                            let meta = [item.owner, item.dueDate].filter { !$0.isEmpty && $0 != "待定" }.joined(separator: " · ")
+                                            let meta = [item.owner, item.dueDate].filter { !$0.isEmpty && $0 != "待定" && $0 != "TBD" }.joined(separator: " · ")
                                             if !meta.isEmpty {
                                                 Text(meta)
                                                     .font(.system(size: 11.5))
@@ -546,18 +549,18 @@ struct DoubaoOutlineMinutesView: View {
 
                             if isEditing {
                                 HStack(spacing: 6) {
-                                    TextField("新增待办...", text: $newActionTask)
+                                    TextField(L("新增待办...", "New action item..."), text: $newActionTask)
                                         .textFieldStyle(.roundedBorder)
                                         .font(.system(size: 12.5))
-                                    TextField("负责人", text: $newActionOwner)
+                                    TextField(L("负责人", "Owner"), text: $newActionOwner)
                                         .textFieldStyle(.roundedBorder)
                                         .font(.system(size: 12))
                                         .frame(width: 72)
-                                    TextField("截止", text: $newActionDue)
+                                    TextField(L("截止", "Due"), text: $newActionDue)
                                         .textFieldStyle(.roundedBorder)
                                         .font(.system(size: 12))
                                         .frame(width: 72)
-                                    Button("添加") {
+                                    Button(L("添加", "Add")) {
                                         let t = newActionTask.trimmingCharacters(in: .whitespacesAndNewlines)
                                         guard !t.isEmpty else { return }
                                         let owner = newActionOwner.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -565,7 +568,7 @@ struct DoubaoOutlineMinutesView: View {
                                         appState.updateMeeting(id: meeting.id) { m in
                                             m.minutes.actionItems.append(ActionItem(
                                                 task: t,
-                                                owner: owner.isEmpty ? "待定" : owner,
+                                                owner: owner.isEmpty ? L("待定", "TBD") : owner,
                                                 dueDate: due
                                             ))
                                         }
@@ -582,7 +585,7 @@ struct DoubaoOutlineMinutesView: View {
                 }
 
                 if !meeting.minutes.openQuestions.isEmpty {
-                    outlineSection("待确认问题") {
+                    outlineSection(L("待确认问题", "Open Questions")) {
                         VStack(alignment: .leading, spacing: 6) {
                             ForEach(meeting.minutes.openQuestions, id: \.self) { q in
                                 HStack(alignment: .top, spacing: 8) {

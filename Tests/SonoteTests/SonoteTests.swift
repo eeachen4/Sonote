@@ -874,6 +874,245 @@ final class SonoteTests: XCTestCase {
         XCTAssertEqual(upToDateCheck?.hasUpdate, false)
     }
 
+    // MARK: - Obsidian / Local Markdown Folder Sync Tests
+
+    func testMarkdownFolderSyncYAMLFrontmatterAndInPlaceUpdate() throws {
+        let tmpDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("sonote-obsidian-test-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: tmpDir) }
+
+        var meeting = MeetingSession(
+            title: "Q4 / 架构评审: \"MLX\" 管线",
+            sourceAppName: "腾讯会议",
+            startedAt: Date(timeIntervalSince1970: 1_764_200_000),
+            duration: 1845,
+            status: .completed,
+            segments: [
+                TranscriptSegment(timestamp: 10, speaker: .me, speakerLabel: "Alex", text: "确认启用端侧降噪。")
+            ],
+            minutes: SmartMinutes(
+                overview: "敲定了端侧 MLX 性能指标。",
+                decisions: ["采用 DeepFilterNet3 v3"],
+                actionItems: [ActionItem(task: "补齐单测", owner: "林致远", dueDate: "周五")],
+                participants: ["Alex", "林致远"],
+                isFinalized: true
+            ),
+            tags: ["架构评审", "MLX"]
+        )
+
+        let firstRes = MarkdownFolderSyncService.shared.sync(meeting: meeting, toFolder: tmpDir.path)
+        XCTAssertTrue(firstRes.isSuccess)
+        XCTAssertEqual(firstRes.syncedCount, 1)
+        let firstURL = try XCTUnwrap(firstRes.lastFileURL)
+        let content1 = try String(contentsOf: firstURL, encoding: .utf8)
+        XCTAssertTrue(content1.hasPrefix("---\n"))
+        XCTAssertTrue(content1.contains("meeting_id: \"\(meeting.id.uuidString)\""))
+        XCTAssertTrue(content1.contains("  - sonote"))
+        XCTAssertTrue(content1.contains("  - 架构评审"))
+        XCTAssertTrue(content1.contains("  - \"Alex\""))
+        XCTAssertTrue(content1.contains("敲定了端侧 MLX 性能指标。"))
+
+        // Rename title and update summary -> must update existing file in-place by meeting_id without duplicates!
+        meeting.title = "Q4 架构评审（修订版）"
+        meeting.minutes.overview = "更新后的最终会议结论。"
+        let secondRes = MarkdownFolderSyncService.shared.sync(meeting: meeting, toFolder: tmpDir.path)
+        XCTAssertTrue(secondRes.isSuccess)
+        XCTAssertEqual(secondRes.lastFileURL?.resolvingSymlinksInPath(), firstURL.resolvingSymlinksInPath())
+
+        let files = try FileManager.default.contentsOfDirectory(at: tmpDir, includingPropertiesForKeys: nil)
+        XCTAssertEqual(files.filter { $0.pathExtension == "md" }.count, 1)
+        let content2 = try String(contentsOf: firstURL, encoding: .utf8)
+        XCTAssertTrue(content2.contains("更新后的最终会议结论。"))
+    }
+
+    // MARK: - MeetingStore Fast Index & Corrupted JSON Resilience Tests
+
+    func testMeetingStoreFastIndexAndCorruptedJSONResilience() throws {
+        let tmpDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("sonote-index-test-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: tmpDir) }
+
+        let store = MeetingStore(baseDirectory: tmpDir)
+
+        let m1 = MeetingSession(
+            title: "DeepSeek 接入技术评审",
+            sourceAppName: "飞书",
+            startedAt: Date().addingTimeInterval(-3600),
+            duration: 900,
+            status: .completed,
+            segments: [TranscriptSegment(timestamp: 5, speaker: .me, text: "解析 prompt_cache_hit_tokens 指标")],
+            minutes: SmartMinutes(
+                overview: "支持 DeepSeek R1 推理模型",
+                actionItems: [
+                    ActionItem(task: "编写缓存解析单测", owner: "Alex", isCompleted: false),
+                    ActionItem(task: "更新设置页 UI", owner: "陈晨", isCompleted: true)
+                ],
+                isFinalized: true
+            ),
+            tags: ["AI", "DeepSeek"]
+        )
+        let m2 = MeetingSession(
+            title: "设计走查会议",
+            sourceAppName: "Zoom",
+            startedAt: Date(),
+            duration: 600,
+            status: .completed,
+            minutes: SmartMinutes(overview: "深色模式对比度微调", isFinalized: true),
+            tags: ["UI"]
+        )
+
+        store.saveMeeting(m1)
+        store.saveMeeting(m2)
+
+        // Inject a corrupted JSON file directly into meetingsDirectory to verify resilience
+        let brokenURL = store.meetingsDirectory.appendingPathComponent("broken-corrupt.json")
+        try Data("{ invalid json !!!".utf8).write(to: brokenURL)
+
+        // Fast index read & single-meeting lazy load
+        let index = store.loadMeetingIndex()
+        XCTAssertEqual(index.count, 2)
+        XCTAssertEqual(index.first?.id, m2.id)
+        XCTAssertEqual(index.last?.openActionItemCount, 1)
+
+        let loadedSingle = store.loadMeeting(id: m1.id)
+        XCTAssertEqual(loadedSingle?.title, m1.title)
+        XCTAssertEqual(loadedSingle?.segments.count, 1)
+
+        // Search via index without touching full files
+        let hits = store.searchIndex(query: "prompt_cache_hit_tokens")
+        XCTAssertEqual(hits.map(\.id), [m1.id])
+        let tagHits = store.searchIndex(query: "", tag: "UI")
+        XCTAssertEqual(tagHits.map(\.id), [m2.id])
+
+        // Rebuild index safely skips broken JSON file
+        let rebuilt = store.rebuildMeetingIndex()
+        XCTAssertEqual(rebuilt.count, 2)
+
+        // Delete removes both meeting file and index entry
+        store.deleteMeeting(m1)
+        XCTAssertEqual(store.loadMeetingIndex().map(\.id), [m2.id])
+        XCTAssertNil(store.loadMeeting(id: m1.id))
+    }
+
+    // MARK: - AppSettings New Fields Backward Compatibility Tests
+
+    func testAppSettingsOnboardingAndObsidianBackwardCompatibility() throws {
+        // Legacy JSON missing hasCompletedOnboarding, obsidianVaultPath, autoSyncMarkdownFolder
+        let legacyJSON = #"{"authMode":"deepSeek","deepSeekModel":"deepseek-chat","appearanceMode":"dark"}"#
+        let decoded = try JSONDecoder().decode(AppSettings.self, from: Data(legacyJSON.utf8))
+        XCTAssertEqual(decoded.authMode, .deepSeek)
+        XCTAssertEqual(decoded.appearanceMode, .dark)
+        XCTAssertEqual(decoded.hasCompletedOnboarding, false)
+        XCTAssertEqual(decoded.obsidianVaultPath, "")
+        XCTAssertEqual(decoded.autoSyncMarkdownFolder, false)
+
+        var updated = decoded
+        updated.hasCompletedOnboarding = true
+        updated.obsidianVaultPath = "~/Documents/Obsidian/Meetings"
+        updated.autoSyncMarkdownFolder = true
+        let reEncoded = try JSONEncoder().encode(updated)
+        let roundTripped = try JSONDecoder().decode(AppSettings.self, from: reEncoded)
+        XCTAssertTrue(roundTripped.hasCompletedOnboarding)
+        XCTAssertEqual(roundTripped.obsidianVaultPath, "~/Documents/Obsidian/Meetings")
+        XCTAssertTrue(roundTripped.autoSyncMarkdownFolder)
+    }
+
+    // MARK: - Webhook HMAC-SHA256 Signing & Payload Builder Tests
+
+    func testWebhookHMACSignaturesAndPayloads() {
+        let meeting = MeetingSession(
+            title: "周会同步",
+            sourceAppName: "飞书",
+            startedAt: Date(timeIntervalSince1970: 1_764_200_000),
+            duration: 1200,
+            minutes: SmartMinutes(
+                overview: "对齐了 v1.6 发版计划。",
+                decisions: ["开启 GitHub CI macOS 26 runner"],
+                actionItems: [ActionItem(task: "补齐单测", owner: "Alex", dueDate: "明天")],
+                isFinalized: true
+            ),
+            tags: ["周会"]
+        )
+
+        // Feishu HMAC-SHA256 deterministic signing & interactive card structure
+        let sign1 = WebhookPushService.feishuSign(timestampSeconds: 1_700_000_000, secret: "sec-demo")
+        let sign2 = WebhookPushService.feishuSign(timestampSeconds: 1_700_000_000, secret: "sec-demo")
+        XCTAssertFalse(sign1.isEmpty)
+        XCTAssertEqual(sign1, sign2)
+        XCTAssertNotEqual(sign1, WebhookPushService.feishuSign(timestampSeconds: 1_700_000_001, secret: "sec-demo"))
+
+        let feishuPayload = WebhookPushService.buildFeishuPayload(
+            for: meeting,
+            secret: "sec-demo",
+            timestamp: Date(timeIntervalSince1970: 1_700_000_000)
+        )
+        XCTAssertEqual(feishuPayload["msg_type"] as? String, "interactive")
+        XCTAssertEqual(feishuPayload["timestamp"] as? String, "1700000000")
+        XCTAssertEqual(feishuPayload["sign"] as? String, sign1)
+
+        // DingTalk signed URL appends &timestamp=&sign= cleanly when ? already present
+        let dtURL = WebhookPushService.buildDingTalkSignedURL(
+            baseURL: "https://oapi.dingtalk.com/robot/send?access_token=abc",
+            secret: "SEC123",
+            timestamp: Date(timeIntervalSince1970: 1_700_000_000)
+        )
+        XCTAssertTrue(dtURL.contains("&timestamp=1700000000000&sign="))
+        let dtPayload = WebhookPushService.buildDingTalkPayload(for: meeting)
+        XCTAssertEqual(dtPayload["msgtype"] as? String, "markdown")
+
+        // Custom JSON payload carries structured fields
+        let custom = WebhookPushService.buildCustomJSONPayload(for: meeting)
+        XCTAssertEqual(custom["event"] as? String, "sonote.meeting.exported")
+        XCTAssertEqual(custom["title"] as? String, "周会同步")
+        XCTAssertEqual((custom["tags"] as? [String]) ?? [], ["周会"])
+    }
+
+    // MARK: - Multi-Provider SSE & Thinking-Tag Parser Tests
+
+    func testMultiProviderSSEParsersAndUnclosedThinkTag() {
+        // Anthropic SSE
+        let claudeStart = GPTClient.parseAnthropicSSEDataLine(#"{"type":"message_start","message":{"usage":{"input_tokens":500,"output_tokens":10,"cache_read_input_tokens":320}}}"#)
+        XCTAssertEqual(claudeStart.inputTokens, 500)
+        XCTAssertEqual(claudeStart.cachedTokens, 320)
+        let claudeDelta = GPTClient.parseAnthropicSSEDataLine(#"{"type":"content_block_delta","delta":{"text":"会议摘要"}}"#)
+        XCTAssertEqual(claudeDelta.delta, "会议摘要")
+        let claudeErr = GPTClient.parseAnthropicSSEDataLine(#"{"type":"error","error":{"message":"overloaded"}}"#)
+        XCTAssertEqual(claudeErr.errorMessage, "overloaded")
+
+        // Gemini SSE with cached + thoughts tokens
+        let geminiChunk = GPTClient.parseGeminiSSEDataLine(#"{"candidates":[{"content":{"parts":[{"text":"结论如下"}]}}],"usageMetadata":{"promptTokenCount":800,"candidatesTokenCount":200,"cachedContentTokenCount":400,"thoughtsTokenCount":90}}"#)
+        XCTAssertEqual(geminiChunk.delta, "结论如下")
+        XCTAssertEqual(geminiChunk.usage?.inputTokens, 800)
+        XCTAssertEqual(geminiChunk.usage?.outputTokens, 200)
+        XCTAssertEqual(geminiChunk.usage?.cachedTokens, 400)
+        XCTAssertEqual(geminiChunk.usage?.reasoningTokens, 90)
+
+        // Codex Responses SSE
+        let codexDone = GPTClient.parseCodexSSEDataLine(#"{"type":"response.completed","response":{"output":[{"content":[{"text":"完整输出"}]}],"usage":{"input_tokens":300,"output_tokens":120}}}"#)
+        XCTAssertEqual(codexDone.completedText, "完整输出")
+        XCTAssertEqual(codexDone.usage?.totalTokens, 420)
+
+        // Unclosed <think> tag safety
+        let unclosed = "前置有效内容\n<think>正在推理中但被截断..."
+        XCTAssertEqual(GPTClient.stripThinkingTags(unclosed), "前置有效内容")
+    }
+
+    // MARK: - WAVEncoder Integrity Tests
+
+    func testWAVEncoderHeaderAndSize() {
+        let samples = (0..<1600).map { i in sin(Float(i) * 0.1) * 0.5 }
+        let wav = WAVEncoder.encodeMono16kWAV(samples: samples, sampleRate: 16_000)
+        // 44-byte RIFF/WAVE header + 1600 * 2 bytes PCM16
+        XCTAssertEqual(wav.count, 44 + 1600 * 2)
+        XCTAssertEqual(String(data: wav.prefix(4), encoding: .ascii), "RIFF")
+        XCTAssertEqual(String(data: wav.subdata(in: 8..<12), encoding: .ascii), "WAVE")
+
+        // Verify 16kHz -> 48kHz mono resampling produces ~3x samples
+        let upsampled = WAVEncoder.resampleMono(samples: samples, from: 16_000, to: 48_000)
+        XCTAssertGreaterThan(upsampled.count, 4500)
+        XCTAssertLessThan(upsampled.count, 5100)
+    }
+
     // MARK: - Opt-in Live Hardware Verification for DeepFilterNet3, ECAPA-TDNN & Sortformer (SONOTE_LIVE_V15=1)
 
     func testLiveVoiceprintDenoiserAndDiarization() async throws {

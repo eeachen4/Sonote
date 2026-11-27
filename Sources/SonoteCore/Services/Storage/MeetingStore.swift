@@ -17,6 +17,46 @@ public struct AudioStorageStats: Equatable, Sendable {
     }
 }
 
+public struct MeetingIndexEntry: Identifiable, Codable, Equatable, Sendable {
+    public var id: UUID
+    public var title: String
+    public var sourceAppName: String
+    public var startedAt: Date
+    public var endedAt: Date?
+    public var duration: TimeInterval
+    public var tags: [String]
+    public var overviewPreview: String
+    public var segmentCount: Int
+    public var openActionItemCount: Int
+    public var totalTokens: Int
+    public var searchableText: String
+
+    public init(from session: MeetingSession) {
+        self.id = session.id
+        self.title = session.title
+        self.sourceAppName = session.sourceAppName
+        self.startedAt = session.startedAt
+        self.endedAt = session.endedAt
+        self.duration = session.duration
+        self.tags = session.tags
+        let preview = session.minutes.overview.isEmpty
+            ? (session.segments.first?.text ?? "")
+            : session.minutes.overview
+        self.overviewPreview = String(preview.prefix(180))
+        self.segmentCount = session.segments.count
+        self.openActionItemCount = session.minutes.actionItems.filter { !$0.isCompleted }.count
+        self.totalTokens = session.tokenUsage.totalTokens
+
+        // Compact lowercased index string for fast offline search across hundreds of meetings
+        var parts: [String] = [session.title, session.sourceAppName, session.minutes.overview]
+        parts.append(contentsOf: session.tags)
+        parts.append(contentsOf: session.minutes.decisions)
+        parts.append(contentsOf: session.minutes.actionItems.map { "\($0.task) \($0.owner)" })
+        parts.append(contentsOf: session.segments.prefix(40).map(\.text))
+        self.searchableText = parts.joined(separator: " ").lowercased()
+    }
+}
+
 public final class MeetingStore: @unchecked Sendable {
     public static let shared = MeetingStore()
 
@@ -25,9 +65,11 @@ public final class MeetingStore: @unchecked Sendable {
     public let audioDirectory: URL
     public let settingsURL: URL
     public let tokenLedgerURL: URL
+    public let meetingsIndexURL: URL
 
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
+    private let indexLock = NSLock()
 
     private static let migrationLock = NSLock()
 
@@ -99,6 +141,7 @@ public final class MeetingStore: @unchecked Sendable {
         self.audioDirectory = self.baseDirectory.appendingPathComponent("audio", isDirectory: true)
         self.settingsURL = self.baseDirectory.appendingPathComponent("settings.json")
         self.tokenLedgerURL = self.baseDirectory.appendingPathComponent("token_ledger.json")
+        self.meetingsIndexURL = self.baseDirectory.appendingPathComponent("meetings_index.json")
 
         let enc = JSONEncoder()
         enc.outputFormatting = [.prettyPrinted, .sortedKeys]
@@ -224,8 +267,8 @@ public final class MeetingStore: @unchecked Sendable {
 
         var sessions: [MeetingSession] = []
         for url in urls where url.pathExtension.lowercased() == "json" {
-            if let data = try? Data(contentsOf: url),
-               var session = try? decoder.decode(MeetingSession.self, from: data) {
+            guard let data = try? Data(contentsOf: url) else { continue }
+            if var session = try? decoder.decode(MeetingSession.self, from: data) {
                 // If app crashed mid-recording previously, mark cleanly as completed
                 if session.status == .recording || session.status == .paused || session.status == .summarizing {
                     session.status = .completed
@@ -233,7 +276,96 @@ public final class MeetingStore: @unchecked Sendable {
                 sessions.append(session)
             }
         }
-        return sessions.sorted { $0.startedAt > $1.startedAt }
+        let sorted = sessions.sorted { $0.startedAt > $1.startedAt }
+        writeIndexEntries(sorted.map(MeetingIndexEntry.init(from:)))
+        return sorted
+    }
+
+    /// Loads a single full `MeetingSession` by UUID on demand (O(1) file read).
+    public func loadMeeting(id: UUID) -> MeetingSession? {
+        let url = meetingsDirectory.appendingPathComponent("\(id.uuidString).json")
+        guard let data = try? Data(contentsOf: url),
+              var session = try? decoder.decode(MeetingSession.self, from: data) else {
+            return nil
+        }
+        if session.status == .recording || session.status == .paused || session.status == .summarizing {
+            session.status = .completed
+        }
+        return session
+    }
+
+    /// Fast O(1) metadata index read for instant startup and lightweight search across large meeting libraries.
+    /// Automatically rebuilds from disk if missing or corrupted.
+    public func loadMeetingIndex() -> [MeetingIndexEntry] {
+        ensureDirectories()
+        indexLock.lock()
+        let cachedData = try? Data(contentsOf: meetingsIndexURL)
+        indexLock.unlock()
+
+        if let cachedData,
+           let entries = try? decoder.decode([MeetingIndexEntry].self, from: cachedData) {
+            return entries.sorted { $0.startedAt > $1.startedAt }
+        }
+        return rebuildMeetingIndex()
+    }
+
+    /// Rebuilds `meetings_index.json` by scanning valid meeting JSON files (safely skipping corrupted files).
+    @discardableResult
+    public func rebuildMeetingIndex() -> [MeetingIndexEntry] {
+        let sessions = loadMeetings()
+        return sessions.map(MeetingIndexEntry.init(from:))
+    }
+
+    /// Fast keyword search against the lightweight index without deserializing full transcripts.
+    public func searchIndex(query: String, tag: String? = nil) -> [MeetingIndexEntry] {
+        let q = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return loadMeetingIndex().filter { entry in
+            if let tag, !entry.tags.contains(tag) { return false }
+            if q.isEmpty { return true }
+            return entry.searchableText.contains(q)
+        }
+    }
+
+    private func writeIndexEntries(_ entries: [MeetingIndexEntry]) {
+        indexLock.lock()
+        defer { indexLock.unlock() }
+        let sorted = entries.sorted { $0.startedAt > $1.startedAt }
+        if let data = try? encoder.encode(sorted) {
+            try? data.write(to: meetingsIndexURL, options: .atomic)
+        }
+    }
+
+    private func upsertIndexEntry(for meeting: MeetingSession) {
+        indexLock.lock()
+        var entries: [MeetingIndexEntry] = []
+        if let data = try? Data(contentsOf: meetingsIndexURL),
+           let decoded = try? decoder.decode([MeetingIndexEntry].self, from: data) {
+            entries = decoded
+        }
+        let entry = MeetingIndexEntry(from: meeting)
+        if let idx = entries.firstIndex(where: { $0.id == meeting.id }) {
+            entries[idx] = entry
+        } else {
+            entries.insert(entry, at: 0)
+        }
+        entries.sort { $0.startedAt > $1.startedAt }
+        if let data = try? encoder.encode(entries) {
+            try? data.write(to: meetingsIndexURL, options: .atomic)
+        }
+        indexLock.unlock()
+    }
+
+    private func removeIndexEntry(id: UUID) {
+        indexLock.lock()
+        defer { indexLock.unlock() }
+        guard let data = try? Data(contentsOf: meetingsIndexURL),
+              var entries = try? decoder.decode([MeetingIndexEntry].self, from: data) else {
+            return
+        }
+        entries.removeAll { $0.id == id }
+        if let encoded = try? encoder.encode(entries) {
+            try? encoded.write(to: meetingsIndexURL, options: .atomic)
+        }
     }
 
     public func saveMeeting(_ meeting: MeetingSession) {
@@ -242,11 +374,13 @@ public final class MeetingStore: @unchecked Sendable {
         if let data = try? encoder.encode(meeting) {
             try? data.write(to: url, options: .atomic)
         }
+        upsertIndexEntry(for: meeting)
     }
 
     public func deleteMeeting(_ meeting: MeetingSession) {
         let jsonURL = meetingsDirectory.appendingPathComponent("\(meeting.id.uuidString).json")
         try? FileManager.default.removeItem(at: jsonURL)
+        removeIndexEntry(id: meeting.id)
         if let audioPath = meeting.audioFilePath {
             try? FileManager.default.removeItem(atPath: audioPath)
         }

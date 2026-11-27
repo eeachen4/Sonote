@@ -486,6 +486,11 @@ public struct AppSettings: Codable, Equatable, Sendable {
     public var fontScale: AppFontScale = .standard
     public var showMenuBarTimer: Bool = true
     public var keepRunningInMenuBarOnClose: Bool = true
+    public var hasCompletedOnboarding: Bool = false
+
+    // Local Markdown / Obsidian Vault Auto-Sync
+    public var obsidianVaultPath: String = ""
+    public var autoSyncMarkdownFolder: Bool = false
 
     // AI & Auth (Multi-Provider: Codex Auth, OpenAI/Ollama/MLX, Claude, Gemini)
     public var authMode: AuthMode = .localAuthFile
@@ -578,6 +583,9 @@ public struct AppSettings: Codable, Equatable, Sendable {
         fontScale = try c.decodeIfPresent(AppFontScale.self, forKey: .fontScale) ?? d.fontScale
         showMenuBarTimer = try c.decodeIfPresent(Bool.self, forKey: .showMenuBarTimer) ?? d.showMenuBarTimer
         keepRunningInMenuBarOnClose = try c.decodeIfPresent(Bool.self, forKey: .keepRunningInMenuBarOnClose) ?? d.keepRunningInMenuBarOnClose
+        hasCompletedOnboarding = try c.decodeIfPresent(Bool.self, forKey: .hasCompletedOnboarding) ?? d.hasCompletedOnboarding
+        obsidianVaultPath = try c.decodeIfPresent(String.self, forKey: .obsidianVaultPath) ?? d.obsidianVaultPath
+        autoSyncMarkdownFolder = try c.decodeIfPresent(Bool.self, forKey: .autoSyncMarkdownFolder) ?? d.autoSyncMarkdownFolder
 
         authMode = try c.decodeIfPresent(AuthMode.self, forKey: .authMode) ?? d.authMode
         authFilePath = try c.decodeIfPresent(String.self, forKey: .authFilePath) ?? d.authFilePath

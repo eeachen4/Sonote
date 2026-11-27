@@ -101,6 +101,7 @@ struct MeetingPromptHUDView: View {
 
     let mode: Mode
     @ObservedObject var appState: AppState
+    @ObservedObject private var theme = ThemeManager.shared
     let cardWidth: CGFloat
     let cardHeight: CGFloat
 
@@ -119,11 +120,11 @@ struct MeetingPromptHUDView: View {
                     }
 
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("检测到「\(detected.appName)」")
+                        Text(L("检测到「\(detected.appName)」", "Detected \"\(detected.appName)\""))
                             .font(.system(size: 13.5, weight: .semibold))
                             .foregroundStyle(AppTheme.textPrimary)
                             .lineLimit(1)
-                        Text("是否开启智能纪要，实时记录会议内容？")
+                        Text(L("是否开启智能纪要，实时记录会议内容？", "Start live AI meeting minutes now?"))
                             .font(.system(size: 12))
                             .foregroundStyle(AppTheme.textSecondary)
                             .lineLimit(1)
@@ -147,7 +148,7 @@ struct MeetingPromptHUDView: View {
                     Button {
                         appState.acceptDetectedMeetingPrompt()
                     } label: {
-                        Text("开启智能纪要")
+                        Text(L("开启智能纪要", "Start Minutes"))
                             .font(.system(size: 12.5, weight: .semibold))
                             .foregroundStyle(.white)
                             .padding(.horizontal, 14)
@@ -159,7 +160,7 @@ struct MeetingPromptHUDView: View {
                     Button {
                         appState.snoozeDetectedMeetingPrompt(minutes: 5)
                     } label: {
-                        Text("稍后提醒")
+                        Text(L("稍后提醒", "Snooze"))
                             .font(.system(size: 12, weight: .medium))
                             .foregroundStyle(AppTheme.textPrimary)
                             .padding(.horizontal, 11)
@@ -173,7 +174,7 @@ struct MeetingPromptHUDView: View {
                     Button {
                         appState.ignoreDetectedAppPermanently()
                     } label: {
-                        Text("不再提醒")
+                        Text(L("不再提醒", "Mute App"))
                             .font(.system(size: 11.5))
                             .foregroundStyle(AppTheme.textMuted)
                             .padding(.horizontal, 6)
@@ -181,12 +182,12 @@ struct MeetingPromptHUDView: View {
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    .help("将此应用加入自动检测忽略列表")
+                    .help(L("将此应用加入自动检测忽略列表", "Add this app to auto-detection ignore list"))
 
                     Button {
                         appState.dismissDetectedMeetingPrompt()
                     } label: {
-                        Text("忽略")
+                        Text(L("忽略", "Dismiss"))
                             .font(.system(size: 12))
                             .foregroundStyle(AppTheme.textSecondary)
                             .padding(.horizontal, 8)
@@ -208,11 +209,11 @@ struct MeetingPromptHUDView: View {
                     }
 
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("「\(ended.appName)」可能已结束")
+                        Text(L("「\(ended.appName)」可能已结束", "\"\(ended.appName)\" May Have Ended"))
                             .font(.system(size: 13.5, weight: .semibold))
                             .foregroundStyle(AppTheme.textPrimary)
                             .lineLimit(1)
-                        Text("是否停止采集并生成完整会议总结？")
+                        Text(L("是否停止采集并生成完整会议总结？", "Stop recording and generate final summary?"))
                             .font(.system(size: 12))
                             .foregroundStyle(AppTheme.textSecondary)
                             .lineLimit(1)
@@ -224,7 +225,7 @@ struct MeetingPromptHUDView: View {
                     Button {
                         Task { await appState.stopRecordingAndFinalize(generateFinalSummary: true) }
                     } label: {
-                        Text("结束并总结")
+                        Text(L("结束并总结", "Stop & Summarize"))
                             .font(.system(size: 12.5, weight: .semibold))
                             .foregroundStyle(.white)
                             .padding(.horizontal, 14)
@@ -236,7 +237,7 @@ struct MeetingPromptHUDView: View {
                     Button {
                         appState.dismissEndedMeetingPrompt()
                     } label: {
-                        Text("继续记录")
+                        Text(L("继续记录", "Keep Recording"))
                             .font(.system(size: 12, weight: .medium))
                             .foregroundStyle(AppTheme.textPrimary)
                             .padding(.horizontal, 11)
@@ -429,25 +430,25 @@ struct LiveCapsuleView: View {
             return appState.mlxModelState.statusText
         }
         if appState.isPaused {
-            return "录音已暂停 · 点击继续采集声音"
+            return L("录音已暂停 · 点击继续采集声音", "Recording paused · Click Resume to continue")
         }
         if appState.isGeneratingMinutes {
-            return "正在提炼实时会议总结..."
+            return L("正在提炼实时会议总结...", "Synthesizing live summary...")
         }
         if !appState.volatileRemoteText.isEmpty {
-            return "发言人：\(appState.volatileRemoteText)"
+            return "\(L("发言人", "Speaker")): \(appState.volatileRemoteText)"
         }
         if !appState.volatileMeText.isEmpty {
-            return "我：\(appState.volatileMeText)"
+            return "\(L("我", "Me")): \(appState.volatileMeText)"
         }
         if let highlight = appState.activeRecordingMeeting?.minutes.latestHighlight {
             return highlight
         }
         if let lastSeg = appState.activeRecordingMeeting?.segments.last {
-            let prefix = lastSeg.speaker == .me ? "我" : "发言人"
-            return "\(prefix)：\(lastSeg.text)"
+            let prefix = lastSeg.speaker == .me ? L("我", "Me") : L("发言人", "Speaker")
+            return "\(prefix): \(lastSeg.text)"
         }
-        return "正在识别说话人和讨论内容..."
+        return L("正在识别说话人和讨论内容...", "Listening for speakers and discussion...")
     }
 }
 
