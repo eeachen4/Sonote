@@ -503,8 +503,18 @@ struct MainWindowView: View {
             return "GPT · \(m)"
         case .apiKey:
             let m = appState.settings.model.isEmpty ? "API" : appState.settings.model
-            let prefix = AuthManager.isLocalhostEndpoint(appState.settings.apiBaseURL) ? "本地" : "GPT"
+            let prefix = AuthManager.isLocalhostEndpoint(appState.settings.apiBaseURL) ? L("本地", "Local") : "GPT"
             return "\(prefix) · \(m)"
+        case .deepSeek:
+            let m = appState.settings.deepSeekModel.isEmpty ? "deepseek-chat" : appState.settings.deepSeekModel
+            return "DeepSeek · \(m)"
+        case .qwenDashScope:
+            let m = appState.settings.qwenModel.isEmpty ? "qwen-plus" : appState.settings.qwenModel
+            return "Qwen · \(m)"
+        case .domesticCloud:
+            let m = appState.settings.domesticModel.isEmpty ? appState.settings.domesticProvider.defaultModel : appState.settings.domesticModel
+            let shortModel = m.split(separator: "/").last.map(String.init) ?? m
+            return "\(appState.settings.domesticProvider.shortName) · \(shortModel)"
         case .anthropicClaude:
             let m = appState.settings.claudeModel.isEmpty ? "Claude" : appState.settings.claudeModel
             return "Claude · \(m)"

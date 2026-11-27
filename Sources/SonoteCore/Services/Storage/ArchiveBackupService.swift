@@ -186,6 +186,9 @@ public enum ArchiveBackupService {
            var imported = try? decoder.decode(AppSettings.self, from: data) {
             let current = store.loadSettings()
             imported.apiKey = current.apiKey
+            imported.deepSeekAPIKey = current.deepSeekAPIKey
+            imported.qwenAPIKey = current.qwenAPIKey
+            imported.domesticAPIKey = current.domesticAPIKey
             imported.claudeAPIKey = current.claudeAPIKey
             imported.geminiAPIKey = current.geminiAPIKey
             imported.webhookSecret = current.webhookSecret

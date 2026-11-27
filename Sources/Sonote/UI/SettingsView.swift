@@ -610,27 +610,33 @@ struct SettingsView: View {
 
     private var aiModelPage: some View {
         VStack(alignment: .leading, spacing: 16) {
-            SettingsCard(title: "模型提供方") {
+            SettingsCard(title: L("模型提供方", "AI Provider")) {
                 VStack(alignment: .leading, spacing: 12) {
-                    // Clean 4-pill provider selector
-                    HStack(spacing: 6) {
+                    // Clean 4x2 provider selector grid (International, Chinese Domestic & Built-in Offline MLX)
+                    LazyVGrid(
+                        columns: Array(repeating: GridItem(.flexible(), spacing: 7), count: 4),
+                        spacing: 7
+                    ) {
                         ForEach(AuthMode.allCases) { mode in
                             let active = appState.settings.authMode == mode
                             Button {
                                 appState.settings.authMode = mode
                             } label: {
                                 Text(mode.displayName)
-                                    .font(.system(size: 12, weight: active ? .semibold : .regular))
+                                    .font(.system(size: 11.5, weight: active ? .semibold : .regular))
                                     .foregroundStyle(active ? AppTheme.brandPrimary : AppTheme.textSecondary)
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.85)
                                     .frame(maxWidth: .infinity)
-                                    .padding(.vertical, 7)
+                                    .padding(.vertical, 7.5)
+                                    .padding(.horizontal, 4)
                                     .background(
                                         RoundedRectangle(cornerRadius: 8, style: .continuous)
                                             .fill(active ? AppTheme.brandSoftFill : AppTheme.softCardBg)
                                     )
                                     .overlay(
                                         RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                            .strokeBorder(active ? AppTheme.brandPrimary.opacity(0.3) : Color.clear, lineWidth: 1)
+                                            .strokeBorder(active ? AppTheme.brandPrimary.opacity(0.35) : Color.clear, lineWidth: 1)
                                     )
                                     .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                             }
@@ -741,7 +747,128 @@ struct SettingsView: View {
                                 selection: $appState.settings.model
                             )
                         }
-                        CleanInputBox(placeholder: "自定义模型 ID（如 deepseek-chat / qwen3:14b）", text: $appState.settings.model)
+                        CleanInputBox(placeholder: "自定义模型 ID（如 gpt-5.4 / qwen3:14b）", text: $appState.settings.model)
+                    }
+                }
+            } else if appState.settings.authMode == .deepSeek {
+                SettingsCard(
+                    title: L("DeepSeek（深度求索）", "DeepSeek API"),
+                    subtitle: L("原生支持 DeepSeek-V3 / R1 推理模型、缓存命中统计与 <think> 自动过滤", "Native DeepSeek-V3 / R1 support with cache-hit accounting & thinking-tag filtering")
+                ) {
+                    VStack(alignment: .leading, spacing: 12) {
+                        VStack(alignment: .leading, spacing: 5) {
+                            fieldLabel("DeepSeek API Key", hint: L("加密存于 macOS 钥匙串；留空时自动读取 DEEPSEEK_API_KEY", "Stored in macOS Keychain; falls back to DEEPSEEK_API_KEY"))
+                            CleanSecureBox(placeholder: "sk-...", text: $appState.settings.deepSeekAPIKey)
+                        }
+                        VStack(alignment: .leading, spacing: 5) {
+                            fieldLabel("Base URL")
+                            CleanInputBox(placeholder: "https://api.deepseek.com/v1", text: $appState.settings.deepSeekBaseURL)
+                        }
+                        HStack {
+                            fieldLabel(L("DeepSeek 模型", "DeepSeek Model"), hint: L("deepseek-chat (V3 极速) / deepseek-reasoner (R1 深度推理)", "deepseek-chat (V3) / deepseek-reasoner (R1)"))
+                            Spacer()
+                            CleanMenuPicker(
+                                title: appState.settings.deepSeekModel.isEmpty ? "选择模型" : appState.settings.deepSeekModel,
+                                options: AppSettings.suggestedDeepSeekModels,
+                                selection: $appState.settings.deepSeekModel
+                            )
+                        }
+                        CleanInputBox(placeholder: "或输入自定义模型 ID（如 deepseek-chat）", text: $appState.settings.deepSeekModel)
+                    }
+                }
+            } else if appState.settings.authMode == .qwenDashScope {
+                SettingsCard(
+                    title: L("通义千问 Qwen（阿里云百炼 DashScope）", "Alibaba Qwen (DashScope)"),
+                    subtitle: L("原生支持 Qwen3 / Qwen-Max / Qwen-Plus / Qwen-Long 超长上下文会议纪要", "Native Qwen3 / Qwen-Max / Qwen-Plus / Qwen-Long support")
+                ) {
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack(spacing: 6) {
+                            Text(L("接入地域", "Region"))
+                                .font(.system(size: 11.5))
+                                .foregroundStyle(AppTheme.textSecondary)
+                            CleanChipButton(L("中国北京（默认）", "Beijing (CN)"), selected: appState.settings.qwenBaseURL.contains("dashscope.aliyuncs.com")) {
+                                appState.settings.qwenBaseURL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+                            }
+                            CleanChipButton(L("新加坡（国际）", "Singapore (Intl)"), selected: appState.settings.qwenBaseURL.contains("dashscope-intl.aliyuncs.com")) {
+                                appState.settings.qwenBaseURL = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
+                            }
+                        }
+
+                        VStack(alignment: .leading, spacing: 5) {
+                            fieldLabel("DashScope API Key", hint: L("加密存于 macOS 钥匙串；留空时自动读取 DASHSCOPE_API_KEY", "Stored in macOS Keychain; falls back to DASHSCOPE_API_KEY"))
+                            CleanSecureBox(placeholder: "sk-...", text: $appState.settings.qwenAPIKey)
+                        }
+                        VStack(alignment: .leading, spacing: 5) {
+                            fieldLabel("Base URL")
+                            CleanInputBox(placeholder: "https://dashscope.aliyuncs.com/compatible-mode/v1", text: $appState.settings.qwenBaseURL)
+                        }
+                        HStack {
+                            fieldLabel(L("通义千问模型", "Qwen Model"), hint: L("日常推荐 qwen-plus，超长会议推荐 qwen-long", "qwen-plus for daily use, qwen-long for long meetings"))
+                            Spacer()
+                            CleanMenuPicker(
+                                title: appState.settings.qwenModel.isEmpty ? "选择模型" : appState.settings.qwenModel,
+                                options: AppSettings.suggestedQwenModels,
+                                selection: $appState.settings.qwenModel
+                            )
+                        }
+                        CleanInputBox(placeholder: "或输入自定义模型 ID（如 qwen3-max / qwq-plus）", text: $appState.settings.qwenModel)
+                    }
+                }
+            } else if appState.settings.authMode == .domesticCloud {
+                let preset = appState.settings.domesticProvider
+                SettingsCard(
+                    title: L("更多国产大模型平台", "More Chinese LLM Providers"),
+                    subtitle: L("一键切换 Kimi、智谱 GLM、豆包火山方舟、硅基流动、MiniMax 与腾讯混元", "One-click presets for Kimi, Zhipu GLM, Doubao Ark, SiliconFlow, MiniMax & Tencent Hunyuan")
+                ) {
+                    VStack(alignment: .leading, spacing: 12) {
+                        LazyVGrid(
+                            columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 3),
+                            spacing: 6
+                        ) {
+                            ForEach(DomesticProviderPreset.allCases) { item in
+                                let active = appState.settings.domesticProvider == item
+                                Button {
+                                    appState.settings.domesticProvider = item
+                                    appState.settings.domesticBaseURL = item.defaultBaseURL
+                                    appState.settings.domesticModel = item.defaultModel
+                                } label: {
+                                    Text(item.shortName)
+                                        .font(.system(size: 11.5, weight: active ? .semibold : .regular))
+                                        .foregroundStyle(active ? AppTheme.brandPrimary : AppTheme.textSecondary)
+                                        .frame(maxWidth: .infinity)
+                                        .padding(.vertical, 6)
+                                        .background(
+                                            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                                                .fill(active ? AppTheme.brandSoftFill : AppTheme.softCardBg)
+                                        )
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                                                .strokeBorder(active ? AppTheme.brandPrimary.opacity(0.35) : Color.clear, lineWidth: 1)
+                                        )
+                                        .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+
+                        VStack(alignment: .leading, spacing: 5) {
+                            fieldLabel("\(preset.shortName) API Key", hint: "加密存于 macOS 钥匙串；留空自动读取 \(preset.envVarName)")
+                            CleanSecureBox(placeholder: "API Key...", text: $appState.settings.domesticAPIKey)
+                        }
+                        VStack(alignment: .leading, spacing: 5) {
+                            fieldLabel("Base URL")
+                            CleanInputBox(placeholder: preset.defaultBaseURL, text: $appState.settings.domesticBaseURL)
+                        }
+                        HStack {
+                            fieldLabel(L("使用模型", "Model ID"), hint: preset.modelHint)
+                            Spacer()
+                            CleanMenuPicker(
+                                title: appState.settings.domesticModel.isEmpty ? "选择模型" : appState.settings.domesticModel,
+                                options: preset.suggestedModels,
+                                selection: $appState.settings.domesticModel
+                            )
+                        }
+                        CleanInputBox(placeholder: preset.defaultModel, text: $appState.settings.domesticModel)
                     }
                 }
             } else if appState.settings.authMode == .anthropicClaude {

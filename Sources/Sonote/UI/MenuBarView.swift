@@ -15,6 +15,11 @@ struct MenuBarView: View {
             return AuthManager.isLocalhostEndpoint(appState.settings.apiBaseURL)
                 ? L("本地服务就绪", "Local Ready")
                 : L("OpenAI 已就绪", "OpenAI Ready")
+        case .deepSeek: return L("DeepSeek 已就绪", "DeepSeek Ready")
+        case .qwenDashScope: return L("通义千问已就绪", "Qwen Ready")
+        case .domesticCloud:
+            let name = appState.settings.domesticProvider.shortName
+            return theme.isEnglish ? "\(name) Ready" : "\(name) 已就绪"
         case .anthropicClaude: return L("Claude 已就绪", "Claude Ready")
         case .googleGemini: return L("Gemini 已就绪", "Gemini Ready")
         case .localMLX: return L("离线 MLX 就绪", "Offline MLX")

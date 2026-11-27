@@ -132,9 +132,97 @@ public enum AppFontScale: String, Codable, CaseIterable, Identifiable, Sendable 
     }
 }
 
+public enum DomesticProviderPreset: String, Codable, CaseIterable, Identifiable, Sendable {
+    case kimi = "kimi"
+    case zhipuGLM = "zhipuGLM"
+    case doubaoArk = "doubaoArk"
+    case siliconFlow = "siliconFlow"
+    case miniMax = "miniMax"
+    case hunyuan = "hunyuan"
+
+    public var id: String { rawValue }
+
+    public var shortName: String {
+        switch self {
+        case .kimi: return "Kimi"
+        case .zhipuGLM: return "智谱 GLM"
+        case .doubaoArk: return "豆包方舟"
+        case .siliconFlow: return "硅基流动"
+        case .miniMax: return "MiniMax"
+        case .hunyuan: return "腾讯混元"
+        }
+    }
+
+    public var displayName: String {
+        switch self {
+        case .kimi: return "Kimi（月之暗面 Moonshot）"
+        case .zhipuGLM: return "智谱 GLM（BigModel）"
+        case .doubaoArk: return "豆包（火山方舟 Ark）"
+        case .siliconFlow: return "硅基流动（SiliconFlow）"
+        case .miniMax: return "MiniMax 开放平台"
+        case .hunyuan: return "腾讯混元（Hunyuan）"
+        }
+    }
+
+    public var defaultBaseURL: String {
+        switch self {
+        case .kimi: return "https://api.moonshot.cn/v1"
+        case .zhipuGLM: return "https://open.bigmodel.cn/api/paas/v4"
+        case .doubaoArk: return "https://ark.cn-beijing.volces.com/api/v3"
+        case .siliconFlow: return "https://api.siliconflow.cn/v1"
+        case .miniMax: return "https://api.minimax.chat/v1"
+        case .hunyuan: return "https://api.hunyuan.cloud.tencent.com/v1"
+        }
+    }
+
+    public var defaultModel: String {
+        suggestedModels.first ?? ""
+    }
+
+    public var suggestedModels: [String] {
+        switch self {
+        case .kimi:
+            return ["kimi-k2-0905-preview", "kimi-k2-turbo-preview", "moonshot-v1-128k", "moonshot-v1-32k"]
+        case .zhipuGLM:
+            return ["glm-4.5", "glm-4.5-air", "glm-4-plus", "glm-4-flash"]
+        case .doubaoArk:
+            return ["doubao-seed-1-6-250615", "doubao-1-5-pro-32k-250115", "doubao-1-5-lite-32k-250115", "deepseek-v3-250324"]
+        case .siliconFlow:
+            return ["deepseek-ai/DeepSeek-V3", "deepseek-ai/DeepSeek-R1", "Qwen/Qwen3-32B", "Qwen/Qwen2.5-72B-Instruct"]
+        case .miniMax:
+            return ["MiniMax-M1", "MiniMax-Text-01", "abab6.5s-chat"]
+        case .hunyuan:
+            return ["hunyuan-turbos-latest", "hunyuan-t1-latest", "hunyuan-large"]
+        }
+    }
+
+    public var envVarName: String {
+        switch self {
+        case .kimi: return "MOONSHOT_API_KEY"
+        case .zhipuGLM: return "ZHIPU_API_KEY"
+        case .doubaoArk: return "ARK_API_KEY"
+        case .siliconFlow: return "SILICONFLOW_API_KEY"
+        case .miniMax: return "MINIMAX_API_KEY"
+        case .hunyuan: return "HUNYUAN_API_KEY"
+        }
+    }
+
+    public var modelHint: String {
+        switch self {
+        case .doubaoArk: return "可直接填模型名或火山方舟推理接入点 ID（ep-...）"
+        case .siliconFlow: return "聚合 DeepSeek-V3 / R1 / Qwen3 等开源旗舰模型"
+        case .kimi: return "长上下文表现优异，适合超长会议纪要与追问"
+        default: return "支持从列表选择或手动输入任意官方模型 ID"
+        }
+    }
+}
+
 public enum AuthMode: String, Codable, CaseIterable, Identifiable, Sendable {
     case localAuthFile = "localAuthFile"
     case apiKey = "apiKey"
+    case deepSeek = "deepSeek"
+    case qwenDashScope = "qwenDashScope"
+    case domesticCloud = "domesticCloud"
     case anthropicClaude = "anthropicClaude"
     case googleGemini = "googleGemini"
     case localMLX = "localMLX"
@@ -144,7 +232,10 @@ public enum AuthMode: String, Codable, CaseIterable, Identifiable, Sendable {
     public var displayName: String {
         switch self {
         case .localAuthFile: return "Codex Auth"
-        case .apiKey: return "OpenAI / 兼容"
+        case .apiKey: return "OpenAI / 本地"
+        case .deepSeek: return "DeepSeek"
+        case .qwenDashScope: return "通义千问 Qwen"
+        case .domesticCloud: return "更多国产"
         case .anthropicClaude: return "Claude"
         case .googleGemini: return "Gemini"
         case .localMLX: return "内置离线 MLX"
@@ -154,7 +245,10 @@ public enum AuthMode: String, Codable, CaseIterable, Identifiable, Sendable {
     public var subtitle: String {
         switch self {
         case .localAuthFile: return "自动读取 ~/.codex/auth.json 或自定义 JSON / .env 凭证文件"
-        case .apiKey: return "支持 OpenAI、DeepSeek、自定义中转或本地 Ollama / MLX Server"
+        case .apiKey: return "支持 OpenAI、自定义中转或本地 Ollama / MLX Server"
+        case .deepSeek: return "原生适配深度求索 DeepSeek-V3 / R1 推理模型，精准统计缓存命中与思考 Token"
+        case .qwenDashScope: return "原生接入阿里云百炼通义千问（Qwen3 / Qwen-Max / Qwen-Plus / Qwen-Long）"
+        case .domesticCloud: return "一键预设 Kimi、智谱 GLM、豆包火山方舟、硅基流动、MiniMax 与腾讯混元"
         case .anthropicClaude: return "原生接入 Anthropic Claude Messages API（支持自定义代理地址）"
         case .googleGemini: return "原生接入 Google Gemini Stream API（支持免费/付费 Key）"
         case .localMLX: return "在 App 内直接通过 Apple Silicon Metal 运行本地 Qwen2.5-Instruct，100% 离线零 Token 费用"
@@ -400,6 +494,16 @@ public struct AppSettings: Codable, Equatable, Sendable {
     public var apiBaseURL: String = "https://api.openai.com/v1"
     public var model: String = "gpt-5.4"
     public var codexModel: String = ""
+    public var deepSeekAPIKey: String = ""
+    public var deepSeekBaseURL: String = "https://api.deepseek.com/v1"
+    public var deepSeekModel: String = "deepseek-chat"
+    public var qwenAPIKey: String = ""
+    public var qwenBaseURL: String = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    public var qwenModel: String = "qwen-plus"
+    public var domesticProvider: DomesticProviderPreset = .kimi
+    public var domesticAPIKey: String = ""
+    public var domesticBaseURL: String = "https://api.moonshot.cn/v1"
+    public var domesticModel: String = "kimi-k2-0905-preview"
     public var claudeAPIKey: String = ""
     public var claudeBaseURL: String = "https://api.anthropic.com/v1"
     public var claudeModel: String = "claude-sonnet-4-5"
@@ -481,6 +585,16 @@ public struct AppSettings: Codable, Equatable, Sendable {
         apiBaseURL = try c.decodeIfPresent(String.self, forKey: .apiBaseURL) ?? d.apiBaseURL
         model = try c.decodeIfPresent(String.self, forKey: .model) ?? d.model
         codexModel = try c.decodeIfPresent(String.self, forKey: .codexModel) ?? d.codexModel
+        deepSeekAPIKey = try c.decodeIfPresent(String.self, forKey: .deepSeekAPIKey) ?? d.deepSeekAPIKey
+        deepSeekBaseURL = try c.decodeIfPresent(String.self, forKey: .deepSeekBaseURL) ?? d.deepSeekBaseURL
+        deepSeekModel = try c.decodeIfPresent(String.self, forKey: .deepSeekModel) ?? d.deepSeekModel
+        qwenAPIKey = try c.decodeIfPresent(String.self, forKey: .qwenAPIKey) ?? d.qwenAPIKey
+        qwenBaseURL = try c.decodeIfPresent(String.self, forKey: .qwenBaseURL) ?? d.qwenBaseURL
+        qwenModel = try c.decodeIfPresent(String.self, forKey: .qwenModel) ?? d.qwenModel
+        domesticProvider = try c.decodeIfPresent(DomesticProviderPreset.self, forKey: .domesticProvider) ?? d.domesticProvider
+        domesticAPIKey = try c.decodeIfPresent(String.self, forKey: .domesticAPIKey) ?? d.domesticAPIKey
+        domesticBaseURL = try c.decodeIfPresent(String.self, forKey: .domesticBaseURL) ?? d.domesticBaseURL
+        domesticModel = try c.decodeIfPresent(String.self, forKey: .domesticModel) ?? d.domesticModel
         claudeAPIKey = try c.decodeIfPresent(String.self, forKey: .claudeAPIKey) ?? d.claudeAPIKey
         claudeBaseURL = try c.decodeIfPresent(String.self, forKey: .claudeBaseURL) ?? d.claudeBaseURL
         claudeModel = try c.decodeIfPresent(String.self, forKey: .claudeModel) ?? d.claudeModel
@@ -548,6 +662,21 @@ public struct AppSettings: Codable, Equatable, Sendable {
         "gpt-6.2-sol",
         "gpt-6.2-astra",
         "gpt-5.6-sol"
+    ]
+
+    public static let suggestedDeepSeekModels: [String] = [
+        "deepseek-chat",
+        "deepseek-reasoner"
+    ]
+
+    public static let suggestedQwenModels: [String] = [
+        "qwen-plus",
+        "qwen-max",
+        "qwen-turbo",
+        "qwen3-max",
+        "qwen3-235b-a22b",
+        "qwq-plus",
+        "qwen-long"
     ]
 
     public static let suggestedClaudeModels: [String] = [

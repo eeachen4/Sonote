@@ -554,7 +554,8 @@ public final class GPTClient: @unchecked Sendable {
         settings: AppSettings
     ) async throws -> String {
         let credential = try authManager.resolveCredential(settings: settings)
-        guard case .openAIAPIKey(let apiKey, let baseURL, _) = credential else {
+        guard case .openAIAPIKey(let apiKey, let baseURL, _, _, let providerLabel) = credential,
+              providerLabel == nil else {
             throw GPTClientError.audioTranscriptionRequiresAPIKey
         }
 
@@ -627,9 +628,9 @@ public final class GPTClient: @unchecked Sendable {
     ) async throws -> GPTCompletionResult {
         let credential = try authManager.resolveCredential(settings: settings)
         switch credential {
-        case .openAIAPIKey(let apiKey, let baseURL, _):
-            let model = settings.model.trimmingCharacters(in: .whitespacesAndNewlines)
-            let chosen = model.isEmpty ? "gpt-5.4" : model
+        case .openAIAPIKey(let apiKey, let baseURL, _, let modelOverride, _):
+            let rawModel = (modelOverride ?? settings.model).trimmingCharacters(in: .whitespacesAndNewlines)
+            let chosen = rawModel.isEmpty ? "gpt-5.4" : rawModel
             do {
                 return try await callOpenAIChatCompletions(
                     apiKey: apiKey,
@@ -640,7 +641,12 @@ public final class GPTClient: @unchecked Sendable {
                     includeStreamUsage: true,
                     onDelta: onDelta
                 )
-            } catch GPTClientError.httpError(400, let detail) where detail.localizedCaseInsensitiveContains("stream_options") {
+            } catch GPTClientError.httpError(let code, let detail)
+                where (code == 400 || code == 422)
+                    && (detail.localizedCaseInsensitiveContains("stream_options")
+                        || detail.localizedCaseInsensitiveContains("include_usage")
+                        || detail.localizedCaseInsensitiveContains("unknown")
+                        || detail.localizedCaseInsensitiveContains("unrecognized")) {
                 return try await callOpenAIChatCompletions(
                     apiKey: apiKey,
                     baseURL: baseURL,
@@ -721,8 +727,9 @@ public final class GPTClient: @unchecked Sendable {
 
     private func activeModel(for credential: ResolvedCredential, settings: AppSettings) -> String {
         switch credential {
-        case .openAIAPIKey:
-            return settings.model.isEmpty ? "gpt-5.4" : settings.model
+        case .openAIAPIKey(_, _, _, let modelOverride, _):
+            let m = (modelOverride ?? settings.model).trimmingCharacters(in: .whitespacesAndNewlines)
+            return m.isEmpty ? "gpt-5.4" : m
         case .codexOAuth(let oauth):
             return resolveCodexModel(settings: settings, authFilePath: oauth.authFilePath)
         case .anthropicAPIKey:
@@ -1169,10 +1176,12 @@ public final class GPTClient: @unchecked Sendable {
 
     public struct ChatCompletionsSSEChunk: Equatable {
         public var delta: String?
+        public var reasoningDelta: String?
         public var usage: TokenUsage?
 
-        public init(delta: String? = nil, usage: TokenUsage? = nil) {
+        public init(delta: String? = nil, reasoningDelta: String? = nil, usage: TokenUsage? = nil) {
             self.delta = delta
+            self.reasoningDelta = reasoningDelta
             self.usage = usage
         }
     }
@@ -1245,10 +1254,15 @@ public final class GPTClient: @unchecked Sendable {
         }
 
         var deltaContent: String? = nil
+        var reasoningContent: String? = nil
         if let choices = json["choices"] as? [[String: Any]],
-           let delta = choices.first?["delta"] as? [String: Any],
-           let content = delta["content"] as? String {
-            deltaContent = content
+           let delta = choices.first?["delta"] as? [String: Any] {
+            if let content = delta["content"] as? String {
+                deltaContent = content
+            }
+            if let reasoning = delta["reasoning_content"] as? String, !reasoning.isEmpty {
+                reasoningContent = reasoning
+            }
         }
 
         var usage: TokenUsage? = nil
@@ -1256,7 +1270,7 @@ public final class GPTClient: @unchecked Sendable {
             usage = parseUsageDict(usageDict)
         }
 
-        return ChatCompletionsSSEChunk(delta: deltaContent, usage: usage)
+        return ChatCompletionsSSEChunk(delta: deltaContent, reasoningDelta: reasoningContent, usage: usage)
     }
 
     public static func parseUsageDict(_ dict: [String: Any]) -> TokenUsage? {
@@ -1270,7 +1284,10 @@ public final class GPTClient: @unchecked Sendable {
         let outputDetails = (dict["output_tokens_details"] as? [String: Any])
             ?? (dict["completion_tokens_details"] as? [String: Any])
 
-        let cached = (inputDetails?["cached_tokens"] as? Int) ?? 0
+        // Support both OpenAI `prompt_tokens_details.cached_tokens` and DeepSeek's top-level `prompt_cache_hit_tokens`
+        let cached = (inputDetails?["cached_tokens"] as? Int)
+            ?? (dict["prompt_cache_hit_tokens"] as? Int)
+            ?? 0
         let reasoning = (outputDetails?["reasoning_tokens"] as? Int) ?? 0
 
         let resolvedInput = input > 0 ? input : max(0, total - output)
@@ -1340,12 +1357,28 @@ public final class GPTClient: @unchecked Sendable {
             overview: "",
             lastUpdatedAt: Date(),
             isFinalized: isFinal,
-            rawMarkdownFallback: rawText.trimmingCharacters(in: .whitespacesAndNewlines)
+            rawMarkdownFallback: stripThinkingTags(rawText)
         )
     }
 
+    /// Removes inline `<think>...</think>` chain-of-thought blocks emitted by reasoning models
+    /// (e.g. DeepSeek-R1 / Qwen3 / QwQ on third-party relays or Ollama) before JSON/Markdown parsing.
+    public static func stripThinkingTags(_ text: String) -> String {
+        var result = text
+        while let start = result.range(of: "<think>", options: .caseInsensitive) {
+            if let end = result.range(of: "</think>", options: .caseInsensitive, range: start.upperBound..<result.endIndex) {
+                result.removeSubrange(start.lowerBound..<end.upperBound)
+            } else {
+                // Unclosed thinking block — strip from <think> to end
+                result.removeSubrange(start.lowerBound..<result.endIndex)
+                break
+            }
+        }
+        return result.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     public static func extractJSONObject(from text: String) -> String {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmed = stripThinkingTags(text)
         if let firstBrace = trimmed.firstIndex(of: "{"),
            let lastBrace = trimmed.lastIndex(of: "}"),
            firstBrace <= lastBrace {

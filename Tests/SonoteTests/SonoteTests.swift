@@ -49,7 +49,7 @@ final class SonoteTests: XCTestCase {
     func testParseAPIKeyFromJSONAndEnv() throws {
         let jsonStr = #"{"OPENAI_API_KEY": "sk-test-1234567890abcdef123456", "OPENAI_BASE_URL": "https://proxy.example.com/v1/"}"#
         let cred1 = try AuthManager.shared.parseAuthData(Data(jsonStr.utf8), filePath: "/tmp/openai.json")
-        guard case .openAIAPIKey(let key1, let baseURL1, _) = cred1 else {
+        guard case .openAIAPIKey(let key1, let baseURL1, _, _, _) = cred1 else {
             return XCTFail("Expected openAIAPIKey")
         }
         XCTAssertEqual(key1, "sk-test-1234567890abcdef123456")
@@ -60,7 +60,7 @@ final class SonoteTests: XCTestCase {
         export OPENAI_API_KEY="sk-env-9876543210fedcba987654"
         """
         let cred2 = try AuthManager.shared.parseAuthData(Data(envStr.utf8), filePath: "/tmp/.env")
-        guard case .openAIAPIKey(let key2, _, _) = cred2 else {
+        guard case .openAIAPIKey(let key2, _, _, _, _) = cred2 else {
             return XCTFail("Expected openAIAPIKey from .env")
         }
         XCTAssertEqual(key2, "sk-env-9876543210fedcba987654")
@@ -599,7 +599,7 @@ final class SonoteTests: XCTestCase {
         localSettings.apiKey = ""
         localSettings.apiBaseURL = "http://localhost:11434/v1"
         let localCred = try AuthManager.shared.resolveCredential(settings: localSettings)
-        if case .openAIAPIKey(let key, let url, _) = localCred {
+        if case .openAIAPIKey(let key, let url, _, _, _) = localCred {
             XCTAssertEqual(key, "local-no-key")
             XCTAssertEqual(url, "http://localhost:11434/v1")
             XCTAssertFalse(localCred.supportsOpenAIAudioAPI)
@@ -793,6 +793,73 @@ final class SonoteTests: XCTestCase {
         XCTAssertEqual(roundTripped.fontScale.multiplier, 1.12, accuracy: 0.001)
         XCTAssertFalse(roundTripped.showMenuBarTimer)
         XCTAssertFalse(roundTripped.keepRunningInMenuBarOnClose)
+
+        // 6. Domestic LLM Providers (DeepSeek, Qwen DashScope, Kimi/GLM/Doubao/SiliconFlow/MiniMax/Hunyuan)
+        var dsSettings = AppSettings()
+        dsSettings.authMode = .deepSeek
+        dsSettings.deepSeekAPIKey = "sk-deepseek-demo"
+        dsSettings.deepSeekModel = "deepseek-reasoner"
+        let dsCred = try AuthManager.shared.resolveCredential(settings: dsSettings)
+        if case .openAIAPIKey(let key, let url, _, let model, let label) = dsCred {
+            XCTAssertEqual(key, "sk-deepseek-demo")
+            XCTAssertEqual(url, "https://api.deepseek.com/v1")
+            XCTAssertEqual(model, "deepseek-reasoner")
+            XCTAssertEqual(label, "DeepSeek")
+            XCTAssertFalse(dsCred.supportsOpenAIAudioAPI)
+        } else {
+            XCTFail("Expected DeepSeek openAIAPIKey credential")
+        }
+
+        var qwenSettings = AppSettings()
+        qwenSettings.authMode = .qwenDashScope
+        qwenSettings.qwenAPIKey = "sk-qwen-demo"
+        qwenSettings.qwenModel = "qwen3-max"
+        let qwenCred = try AuthManager.shared.resolveCredential(settings: qwenSettings)
+        if case .openAIAPIKey(let key, let url, _, let model, let label) = qwenCred {
+            XCTAssertEqual(key, "sk-qwen-demo")
+            XCTAssertEqual(url, "https://dashscope.aliyuncs.com/compatible-mode/v1")
+            XCTAssertEqual(model, "qwen3-max")
+            XCTAssertEqual(label, "通义千问 Qwen")
+        } else {
+            XCTFail("Expected Qwen DashScope credential")
+        }
+
+        var kimiSettings = AppSettings()
+        kimiSettings.authMode = .domesticCloud
+        kimiSettings.domesticProvider = .siliconFlow
+        kimiSettings.domesticAPIKey = "sk-sf-demo"
+        kimiSettings.domesticBaseURL = DomesticProviderPreset.siliconFlow.defaultBaseURL
+        kimiSettings.domesticModel = "deepseek-ai/DeepSeek-V3"
+        let sfCred = try AuthManager.shared.resolveCredential(settings: kimiSettings)
+        if case .openAIAPIKey(_, let url, _, let model, let label) = sfCred {
+            XCTAssertEqual(url, "https://api.siliconflow.cn/v1")
+            XCTAssertEqual(model, "deepseek-ai/DeepSeek-V3")
+            XCTAssertEqual(label, "硅基流动")
+        } else {
+            XCTFail("Expected SiliconFlow domestic credential")
+        }
+
+        // DeepSeek top-level `prompt_cache_hit_tokens` + `reasoning_content` SSE + `<think>` JSON stripping
+        let dsSSE = #"{"choices":[{"delta":{"reasoning_content":"先梳理议题","content":"最终结论"}}],"usage":{"prompt_tokens":1200,"completion_tokens":380,"prompt_cache_hit_tokens":900,"completion_tokens_details":{"reasoning_tokens":140}}}"#
+        let dsChunk = GPTClient.parseChatCompletionsSSEChunk(dsSSE)
+        XCTAssertEqual(dsChunk.delta, "最终结论")
+        XCTAssertEqual(dsChunk.reasoningDelta, "先梳理议题")
+        XCTAssertEqual(dsChunk.usage?.inputTokens, 1200)
+        XCTAssertEqual(dsChunk.usage?.outputTokens, 380)
+        XCTAssertEqual(dsChunk.usage?.cachedTokens, 900)
+        XCTAssertEqual(dsChunk.usage?.reasoningTokens, 140)
+
+        let rawWithThink = """
+        <think>草稿思考：{"ignore": true} 应该按模板输出 JSON</think>
+        ```json
+        {"suggestedTitle":"国产模型评审","overview":"完成 DeepSeek 与通义千问接入","topics":[],"decisions":["默认启用流式输出"],"actionItems":[],"openQuestions":[]}
+        ```
+        """
+        let parsedFromThink = GPTClient.parseSmartMinutes(from: rawWithThink, isFinal: true)
+        XCTAssertEqual(parsedFromThink.suggestedTitle, "国产模型评审")
+        XCTAssertEqual(parsedFromThink.overview, "完成 DeepSeek 与通义千问接入")
+        XCTAssertEqual(parsedFromThink.decisions, ["默认启用流式输出"])
+        XCTAssertNil(parsedFromThink.rawMarkdownFallback)
     }
 
     // MARK: - Opt-in Live Hardware Verification for DeepFilterNet3, ECAPA-TDNN & Sortformer (SONOTE_LIVE_V15=1)

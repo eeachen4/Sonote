@@ -49,7 +49,7 @@ public struct CodexOAuthCredential: Equatable, Sendable {
 }
 
 public enum ResolvedCredential: Equatable, Sendable {
-    case openAIAPIKey(apiKey: String, baseURL: String, source: String)
+    case openAIAPIKey(apiKey: String, baseURL: String, source: String, modelOverride: String? = nil, providerLabel: String? = nil)
     case codexOAuth(CodexOAuthCredential)
     case anthropicAPIKey(apiKey: String, baseURL: String, source: String)
     case geminiAPIKey(apiKey: String, baseURL: String, source: String)
@@ -57,8 +57,9 @@ public enum ResolvedCredential: Equatable, Sendable {
 
     public var displayBadge: String {
         switch self {
-        case .openAIAPIKey(_, _, let source):
-            return "OpenAI 兼容 (\(source))"
+        case .openAIAPIKey(_, _, let source, _, let providerLabel):
+            let label = providerLabel ?? "OpenAI 兼容"
+            return "\(label) (\(source))"
         case .codexOAuth(let oauth):
             if let email = oauth.email, !email.isEmpty {
                 return "Codex Auth · \(email)"
@@ -75,8 +76,8 @@ public enum ResolvedCredential: Equatable, Sendable {
     }
 
     public var supportsOpenAIAudioAPI: Bool {
-        if case .openAIAPIKey(let key, _, _) = self {
-            return !key.isEmpty && key != "local-no-key"
+        if case .openAIAPIKey(let key, _, _, _, let providerLabel) = self {
+            return providerLabel == nil && !key.isEmpty && key != "local-no-key"
         }
         return false
     }
@@ -213,6 +214,49 @@ public final class AuthManager: @unchecked Sendable {
             }
             throw AuthError.missingCredential("请输入 OpenAI API Key，或填本地 Ollama / MLX Server 地址（如 http://localhost:11434/v1）。")
 
+        case .deepSeek:
+            let trimmedKey = settings.deepSeekAPIKey.trimmingCharacters(in: .whitespacesAndNewlines)
+            let baseURL = normalizeCustomBaseURL(settings.deepSeekBaseURL, fallback: "https://api.deepseek.com/v1")
+            let chosenModel = settings.deepSeekModel.trimmingCharacters(in: .whitespacesAndNewlines)
+            let model = chosenModel.isEmpty ? "deepseek-chat" : chosenModel
+            if !trimmedKey.isEmpty {
+                return .openAIAPIKey(apiKey: trimmedKey, baseURL: baseURL, source: "手动输入", modelOverride: model, providerLabel: "DeepSeek")
+            }
+            if let envKey = ProcessInfo.processInfo.environment["DEEPSEEK_API_KEY"]?.trimmingCharacters(in: .whitespacesAndNewlines),
+               !envKey.isEmpty {
+                return .openAIAPIKey(apiKey: envKey, baseURL: baseURL, source: "环境变量", modelOverride: model, providerLabel: "DeepSeek")
+            }
+            throw AuthError.missingCredential("请输入 DeepSeek API Key（或配置 DEEPSEEK_API_KEY 环境变量）。")
+
+        case .qwenDashScope:
+            let trimmedKey = settings.qwenAPIKey.trimmingCharacters(in: .whitespacesAndNewlines)
+            let baseURL = normalizeCustomBaseURL(settings.qwenBaseURL, fallback: "https://dashscope.aliyuncs.com/compatible-mode/v1")
+            let chosenModel = settings.qwenModel.trimmingCharacters(in: .whitespacesAndNewlines)
+            let model = chosenModel.isEmpty ? "qwen-plus" : chosenModel
+            if !trimmedKey.isEmpty {
+                return .openAIAPIKey(apiKey: trimmedKey, baseURL: baseURL, source: "手动输入", modelOverride: model, providerLabel: "通义千问 Qwen")
+            }
+            if let envKey = (ProcessInfo.processInfo.environment["DASHSCOPE_API_KEY"] ?? ProcessInfo.processInfo.environment["QWEN_API_KEY"])?.trimmingCharacters(in: .whitespacesAndNewlines),
+               !envKey.isEmpty {
+                return .openAIAPIKey(apiKey: envKey, baseURL: baseURL, source: "环境变量", modelOverride: model, providerLabel: "通义千问 Qwen")
+            }
+            throw AuthError.missingCredential("请输入阿里云百炼 DashScope API Key（或配置 DASHSCOPE_API_KEY 环境变量）。")
+
+        case .domesticCloud:
+            let preset = settings.domesticProvider
+            let trimmedKey = settings.domesticAPIKey.trimmingCharacters(in: .whitespacesAndNewlines)
+            let baseURL = normalizeCustomBaseURL(settings.domesticBaseURL, fallback: preset.defaultBaseURL)
+            let chosenModel = settings.domesticModel.trimmingCharacters(in: .whitespacesAndNewlines)
+            let model = chosenModel.isEmpty ? preset.defaultModel : chosenModel
+            if !trimmedKey.isEmpty {
+                return .openAIAPIKey(apiKey: trimmedKey, baseURL: baseURL, source: "手动输入", modelOverride: model, providerLabel: preset.shortName)
+            }
+            if let envKey = ProcessInfo.processInfo.environment[preset.envVarName]?.trimmingCharacters(in: .whitespacesAndNewlines),
+               !envKey.isEmpty {
+                return .openAIAPIKey(apiKey: envKey, baseURL: baseURL, source: "环境变量", modelOverride: model, providerLabel: preset.shortName)
+            }
+            throw AuthError.missingCredential("请输入 \(preset.displayName) API Key（或配置 \(preset.envVarName) 环境变量）。")
+
         case .anthropicClaude:
             let trimmedKey = settings.claudeAPIKey.trimmingCharacters(in: .whitespacesAndNewlines)
             let baseURL = normalizeCustomBaseURL(settings.claudeBaseURL, fallback: "https://api.anthropic.com/v1")
@@ -267,11 +311,12 @@ public final class AuthManager: @unchecked Sendable {
         do {
             let credential = try resolveCredential(settings: settings)
             switch credential {
-            case .openAIAPIKey(let apiKey, let baseURL, let source):
+            case .openAIAPIKey(let apiKey, let baseURL, let source, _, let providerLabel):
                 let masked = apiKey == "local-no-key" ? "无需 Key (离线本地)" : maskSecret(apiKey)
+                let summaryPrefix = providerLabel.map { "\($0) (\(source))" } ?? source
                 return AuthInspectionResult(
                     isValid: true,
-                    summary: "已就绪 · \(source)",
+                    summary: "已就绪 · \(summaryPrefix)",
                     detail: "Key: \(masked) · Endpoint: \(baseURL)",
                     credential: credential
                 )

@@ -30,9 +30,10 @@ Behind a calm, minimalist light UI, Sonote runs an end-to-end on-device **MLX** 
   - **Streaming Silero VAD**: 512-sample (32 ms) frame-by-frame LSTM endpointing.
   - **DeepFilterNet3 v3 Denoiser**: Neural speech enhancement (~59x real-time on M4 Pro) for noisy offices and cafés.
   - **Local ECAPA-TDNN Voiceprint Library & Diarization**: 192-dim speaker embeddings persisted 100% offline. Supports **Sortformer** (≤4 speakers) and **ECAPA online clustering** (5–12+ speakers) to automatically identify real names across meetings.
-- **Built-In Offline MLX LLM + Multi-Provider Cloud AI**:
+- **Built-In Offline MLX LLM + Multi-Provider Cloud AI (Global & Chinese LLMs)**:
   - Run quantized `Qwen2.5-Instruct` (`1.5B` / `3B` / `7B` 4-bit) directly inside the app via Metal GPU with zero external servers or token fees.
-  - Or connect **OpenAI / DeepSeek / Ollama / MLX Server**, **Anthropic Claude**, **Google Gemini**, or local **Codex Auth** — all secrets stored in macOS Keychain.
+  - First-class support for **DeepSeek** (`deepseek-chat` / `deepseek-reasoner` with cache-hit & `<think>` handling), **Alibaba Qwen / DashScope** (`qwen-plus` / `qwen-max` / `qwen3-max` / `qwen-long`), and one-click presets for **Kimi (Moonshot)**, **Zhipu GLM**, **Doubao (Volcengine Ark)**, **SiliconFlow**, **MiniMax**, and **Tencent Hunyuan**.
+  - Also supports **OpenAI / Ollama / MLX Server**, **Anthropic Claude**, **Google Gemini**, and local **Codex Auth** — all API keys stored in macOS Keychain.
 - **Minimalist Productivity & Team Workflows**:
   - Compact floating recording capsule (`316×108`), collapsible live manual notes, custom summary prompt templates, meeting tags, global action-item tracker synced to **Apple Reminders**, and **Cross-Meeting AI Q&A**.
   - One-click **Feishu / DingTalk / Custom JSON (Notion, n8n) Webhook** push with official HMAC-SHA256 signing, rich-text HTML/RTF copy, paginated A4 PDF export, Mermaid mind maps, and portable `.zip` full-library backup & merge restore (API keys stripped).

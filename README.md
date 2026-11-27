@@ -45,12 +45,14 @@
   - 同时提供 **Sortformer（≤4 人精准分离）** 与 **ECAPA 在线聚类（突破 4 人上限，支持 5~12 人大组会）**，支持会中实时分离与「AI 猜姓名」上下文推断。
 - 同步保留 **Apple 本机语音识别**（`SpeechAnalyzer` / `SFSpeechRecognizer`）与 **OpenAI Audio Transcribe API** 作为备选。
 
-### 4. 多模型提供方 & 内置 100% 离线 MLX 大模型
+### 4. 多模型提供方 & 国产大模型原生适配 & 内置离线引擎
 所有 API 密钥与 Webhook 签名密钥均加密存储于 **macOS Keychain**，绝不落盘明文：
+- **国产大模型原生支持**：
+  - **DeepSeek（深度求索）**：独立配置 `deepseek-chat` (V3) / `deepseek-reasoner` (R1)，精准解析 `prompt_cache_hit_tokens` 缓存命中与思考 Token，并自动过滤 `<think>` 标签确保 JSON 纪要稳定输出。
+  - **通义千问 Qwen（阿里云百炼 DashScope）**：支持北京/新加坡节点一键切换，内置 `qwen-plus` / `qwen-max` / `qwen-turbo` / `qwen3-max` / `qwq-plus` / `qwen-long`（超长会议神器）。
+  - **更多国产平台一键预设**：内置 **Kimi（月之暗面）**、**智谱 GLM**、**豆包（火山方舟 Ark）**、**硅基流动（SiliconFlow）**、**MiniMax**、**腾讯混元** 预设地址与模型列表。
 - **App 内置离线 MLX LLM**：直接基于 `MLXAudioCore.Qwen2Model` 在本机 Metal GPU 上流式运行量化 `Qwen2.5-Instruct`（`1.5B` / `3B` / `7B` 4-bit），**零外部 Ollama 进程、100% 离线、零 Token 费用**。
-- **OpenAI / 兼容 API / 本地服务**：支持 OpenAI、DeepSeek、自定义中转及本地 **Ollama (`localhost:11434/v1`) / MLX Server (`localhost:8080/v1`)**。
-- **Anthropic Claude & Google Gemini**：原生接入 Claude Messages SSE 与 Gemini Stream SSE。
-- **本机 Codex Auth**：自动识别 `~/.codex/auth.json`（OAuth 自动刷新 + 模型目录发现）。
+- **OpenAI / 本地服务 / Claude / Gemini / Codex Auth**：同时原生支持 OpenAI、本地 **Ollama / MLX Server**、Anthropic Claude、Google Gemini 与 `~/.codex/auth.json`。
 
 ### 5. 极简工作台、协作推送与数据迁移
 - **极简浅色 UI & 左上角悬浮小窗**：录制中可自动收起为 `316×108` 悬浮胶囊，支持一键展开双栏视图与底部「会中随手记」；主页支持标题、逐字稿与待办全文搜索。

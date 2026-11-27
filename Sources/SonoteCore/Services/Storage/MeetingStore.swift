@@ -122,6 +122,9 @@ public final class MeetingStore: @unchecked Sendable {
     // MARK: - Settings Persistence (All Provider API Keys Stored Securely in macOS Keychain)
 
     private static let keychainAPIKeyAccount = "openai_api_key"
+    private static let keychainDeepSeekKeyAccount = "deepseek_api_key"
+    private static let keychainQwenKeyAccount = "dashscope_api_key"
+    private static let keychainDomesticKeyAccount = "domestic_cloud_api_key"
     private static let keychainClaudeKeyAccount = "anthropic_api_key"
     private static let keychainGeminiKeyAccount = "google_gemini_api_key"
     private static let keychainWebhookSecretAccount = "webhook_signing_secret"
@@ -147,6 +150,9 @@ public final class MeetingStore: @unchecked Sendable {
             }
         }
         hydrateKey(&settings.apiKey, account: Self.keychainAPIKeyAccount)
+        hydrateKey(&settings.deepSeekAPIKey, account: Self.keychainDeepSeekKeyAccount)
+        hydrateKey(&settings.qwenAPIKey, account: Self.keychainQwenKeyAccount)
+        hydrateKey(&settings.domesticAPIKey, account: Self.keychainDomesticKeyAccount)
         hydrateKey(&settings.claudeAPIKey, account: Self.keychainClaudeKeyAccount)
         hydrateKey(&settings.geminiAPIKey, account: Self.keychainGeminiKeyAccount)
         hydrateKey(&settings.webhookSecret, account: Self.keychainWebhookSecretAccount)
@@ -154,6 +160,9 @@ public final class MeetingStore: @unchecked Sendable {
         if needsDiskSanitize {
             var sanitized = settings
             sanitized.apiKey = ""
+            sanitized.deepSeekAPIKey = ""
+            sanitized.qwenAPIKey = ""
+            sanitized.domesticAPIKey = ""
             sanitized.claudeAPIKey = ""
             sanitized.geminiAPIKey = ""
             sanitized.webhookSecret = ""
@@ -177,11 +186,17 @@ public final class MeetingStore: @unchecked Sendable {
         ensureDirectories()
         // Keep all provider API keys & webhook secrets in macOS Keychain, never write raw keys to settings.json on disk
         _ = KeychainStore.shared.save(settings.apiKey, account: Self.keychainAPIKeyAccount)
+        _ = KeychainStore.shared.save(settings.deepSeekAPIKey, account: Self.keychainDeepSeekKeyAccount)
+        _ = KeychainStore.shared.save(settings.qwenAPIKey, account: Self.keychainQwenKeyAccount)
+        _ = KeychainStore.shared.save(settings.domesticAPIKey, account: Self.keychainDomesticKeyAccount)
         _ = KeychainStore.shared.save(settings.claudeAPIKey, account: Self.keychainClaudeKeyAccount)
         _ = KeychainStore.shared.save(settings.geminiAPIKey, account: Self.keychainGeminiKeyAccount)
         _ = KeychainStore.shared.save(settings.webhookSecret, account: Self.keychainWebhookSecretAccount)
         var diskSafe = settings
         diskSafe.apiKey = ""
+        diskSafe.deepSeekAPIKey = ""
+        diskSafe.qwenAPIKey = ""
+        diskSafe.domesticAPIKey = ""
         diskSafe.claudeAPIKey = ""
         diskSafe.geminiAPIKey = ""
         diskSafe.webhookSecret = ""
