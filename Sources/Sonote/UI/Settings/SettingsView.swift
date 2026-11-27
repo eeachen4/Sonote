@@ -107,6 +107,7 @@ struct SettingsView: View {
         .background(AppTheme.canvasWhite)
         .tint(AppTheme.brandPrimary)
         .preferredColorScheme(theme.preferredColorScheme)
+        .navigationTitle(L("Sonote 设置", "Sonote Settings"))
         .onAppear {
             discoveredAuthFiles = AuthManager.shared.discoverExistingAuthFiles()
             refreshCodexModels()

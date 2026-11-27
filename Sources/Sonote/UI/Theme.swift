@@ -181,6 +181,18 @@ enum AppTheme {
         light: NSColor(srgbRed: 0.90, green: 0.91, blue: 0.93, alpha: 1.0),
         dark: NSColor(srgbRed: 0.20, green: 0.22, blue: 0.27, alpha: 1.0)
     )
+    static let inputBackground = dynamic(
+        light: NSColor(srgbRed: 1.0, green: 1.0, blue: 1.0, alpha: 1.0),            // #FFFFFF crisp editable field
+        dark: NSColor(srgbRed: 0.075, green: 0.082, blue: 0.106, alpha: 1.0)      // #13151B recessed dark well
+    )
+    static let inputBorder = dynamic(
+        light: NSColor(srgbRed: 0.82, green: 0.84, blue: 0.88, alpha: 1.0),       // #D1D6E0 clearer than card border
+        dark: NSColor(srgbRed: 0.25, green: 0.27, blue: 0.34, alpha: 1.0)
+    )
+    static let inputHoverBorder = dynamic(
+        light: NSColor(srgbRed: 0.70, green: 0.73, blue: 0.79, alpha: 1.0),
+        dark: NSColor(srgbRed: 0.34, green: 0.37, blue: 0.46, alpha: 1.0)
+    )
     static let inlineCodeBg = dynamic(
         light: NSColor(srgbRed: 0.94, green: 0.95, blue: 0.97, alpha: 1.0),
         dark: NSColor(srgbRed: 0.17, green: 0.19, blue: 0.24, alpha: 1.0)

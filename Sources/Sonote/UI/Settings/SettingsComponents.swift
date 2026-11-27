@@ -68,16 +68,39 @@ struct CleanInputBox: View {
     @Binding var text: String
     var onSubmitAction: (() -> Void)? = nil
 
+    @FocusState private var isFocused: Bool
+    @State private var isHovering: Bool = false
+
     var body: some View {
         TextField(placeholder, text: $text)
             .textFieldStyle(.plain)
             .font(.system(size: 12.5))
             .foregroundStyle(AppTheme.textPrimary)
             .multilineTextAlignment(.leading)
+            .focused($isFocused)
             .padding(.horizontal, 10)
             .padding(.vertical, 7)
-            .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(AppTheme.softCardBg))
-            .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(AppTheme.subtleBorder, lineWidth: 1))
+            .background(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(AppTheme.inputBackground)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .strokeBorder(
+                        isFocused
+                            ? AppTheme.brandPrimary
+                            : (isHovering ? AppTheme.inputHoverBorder : AppTheme.inputBorder),
+                        lineWidth: isFocused ? 1.5 : 1
+                    )
+            )
+            .shadow(
+                color: isFocused ? AppTheme.brandPrimary.opacity(0.18) : Color.black.opacity(0.02),
+                radius: isFocused ? 4 : 1,
+                y: isFocused ? 0 : 0.5
+            )
+            .animation(.easeOut(duration: 0.14), value: isFocused)
+            .animation(.easeOut(duration: 0.12), value: isHovering)
+            .onHover { isHovering = $0 }
             .onSubmit { onSubmitAction?() }
     }
 }
@@ -86,16 +109,62 @@ struct CleanSecureBox: View {
     let placeholder: String
     @Binding var text: String
 
+    @FocusState private var isFocused: Bool
+    @State private var isHovering: Bool = false
+    @State private var isRevealed: Bool = false
+
     var body: some View {
-        SecureField(placeholder, text: $text)
+        HStack(spacing: 6) {
+            Group {
+                if isRevealed {
+                    TextField(placeholder, text: $text)
+                } else {
+                    SecureField(placeholder, text: $text)
+                }
+            }
             .textFieldStyle(.plain)
             .font(.system(size: 12.5))
             .foregroundStyle(AppTheme.textPrimary)
             .multilineTextAlignment(.leading)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 7)
-            .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(AppTheme.softCardBg))
-            .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(AppTheme.subtleBorder, lineWidth: 1))
+            .focused($isFocused)
+
+            if !text.isEmpty {
+                Button {
+                    isRevealed.toggle()
+                } label: {
+                    Image(systemName: isRevealed ? "eye.slash" : "eye")
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(AppTheme.textMuted)
+                        .frame(width: 20, height: 18)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help(isRevealed ? L("隐藏密钥", "Hide Secret") : L("显示密钥", "Show Secret"))
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+        .background(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(AppTheme.inputBackground)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .strokeBorder(
+                    isFocused
+                        ? AppTheme.brandPrimary
+                        : (isHovering ? AppTheme.inputHoverBorder : AppTheme.inputBorder),
+                    lineWidth: isFocused ? 1.5 : 1
+                )
+        )
+        .shadow(
+            color: isFocused ? AppTheme.brandPrimary.opacity(0.18) : Color.black.opacity(0.02),
+            radius: isFocused ? 4 : 1,
+            y: isFocused ? 0 : 0.5
+        )
+        .animation(.easeOut(duration: 0.14), value: isFocused)
+        .animation(.easeOut(duration: 0.12), value: isHovering)
+        .onHover { isHovering = $0 }
     }
 }
 
@@ -154,12 +223,16 @@ struct CleanPrimaryButton: View {
                 Text(title)
                     .font(.system(size: 12, weight: .medium))
             }
-            .foregroundStyle(.white)
+            .foregroundStyle(disabled ? AppTheme.textSecondary.opacity(0.75) : Color.white)
             .padding(.horizontal, 13)
             .padding(.vertical, 6.5)
             .background(
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(disabled ? AppTheme.brandPrimary.opacity(0.38) : AppTheme.brandPrimary)
+                    .fill(disabled ? AppTheme.neutralPill : AppTheme.brandPrimary)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .strokeBorder(disabled ? AppTheme.subtleBorder : Color.clear, lineWidth: 1)
             )
             .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         }
@@ -171,6 +244,7 @@ struct CleanPrimaryButton: View {
 struct CleanSmallButton: View {
     let title: String
     let action: () -> Void
+    @State private var isHovering: Bool = false
 
     init(_ title: String, action: @escaping () -> Void) {
         self.title = title
@@ -184,11 +258,18 @@ struct CleanSmallButton: View {
                 .foregroundStyle(AppTheme.textPrimary)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 5.5)
-                .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(AppTheme.softCardBg))
-                .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(AppTheme.subtleBorder, lineWidth: 1))
+                .background(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(isHovering ? AppTheme.neutralPill : AppTheme.softCardBg)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .strokeBorder(isHovering ? AppTheme.inputBorder : AppTheme.subtleBorder, lineWidth: 1)
+                )
                 .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         }
         .buttonStyle(.plain)
+        .onHover { isHovering = $0 }
     }
 }
 
