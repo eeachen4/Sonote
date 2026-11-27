@@ -1,0 +1,12 @@
+.DS_Store
+.build/
+.swiftpm/
+dist/
+*.xcodeproj
+*.xcworkspace
+*.xcresult
+DerivedData/
+xcuserdata/
+*.m4a
+*.wav
+*.aiff

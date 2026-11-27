@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleDevelopmentRegion</key>
+    <string>zh_CN</string>
+    <key>CFBundleDisplayName</key>
+    <string>Sonote</string>
+    <key>CFBundleExecutable</key>
+    <string>Sonote</string>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
+    <key>CFBundleIdentifier</key>
+    <string>com.sonote.app</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+    <key>CFBundleName</key>
+    <string>Sonote</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleShortVersionString</key>
+    <string>1.5.0</string>
+    <key>CFBundleVersion</key>
+    <string>6</string>
+    <key>LSApplicationCategoryType</key>
+    <string>public.app-category.productivity</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>15.0</string>
+    <key>LSUIElement</key>
+    <false/>
+    <key>NSHighResolutionCapable</key>
+    <true/>
+    <key>NSPrincipalClass</key>
+    <string>NSApplication</string>
+    <key>NSAudioCaptureUsageDescription</key>
+    <string>Sonote（声记）需要采集系统声音，以便实时记录线上会议中其他参会人的发言并生成智能会议纪要。</string>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>Sonote（声记）需要访问麦克风，以便同步记录您在会议中的发言内容。</string>
+    <key>NSSpeechRecognitionUsageDescription</key>
+    <string>Sonote（声记）需要使用本地语音识别将会议音频实时转写为文字逐字稿。</string>
+    <key>NSCalendarsFullAccessUsageDescription</key>
+    <string>Sonote（声记）可读取您的日程标题与参会人姓名，自动命名会议并提升人名语音识别准确率。</string>
+    <key>NSCalendarsUsageDescription</key>
+    <string>Sonote（声记）可读取您的日程标题与参会人姓名，自动命名会议并提升人名语音识别准确率。</string>
+    <key>NSRemindersFullAccessUsageDescription</key>
+    <string>Sonote（声记）可将会议待办事项一键同步到 macOS「提醒事项」中，方便您跟进截止时间。</string>
+    <key>NSRemindersUsageDescription</key>
+    <string>Sonote（声记）可将会议待办事项一键同步到 macOS「提醒事项」中，方便您跟进截止时间。</string>
+    <key>NSUserNotificationAlertStyle</key>
+    <string>alert</string>
+</dict>
+</plist>
