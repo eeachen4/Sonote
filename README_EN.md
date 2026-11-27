@@ -27,6 +27,46 @@ Behind an adaptive Light/Dark minimalist UI with 6 customizable accent themes an
 
 ---
 
+## Screenshots
+
+### Minimalist Home Workspace
+Live meeting auto-detection status, one-click dual-track recording, offline audio/video drag-and-drop import, global action items, and cross-meeting AI Q&A.
+
+<p align="center">
+  <img src="./docs/assets/home-light.png" alt="Sonote Home Workspace (Light Mode)" width="96%" />
+</p>
+
+### Live 2-Column Recording & Real-Time Mind-Map
+Left pane displays speaker-labeled dual-track transcripts and collapsible live notes; right pane continuously synthesizes a structured mind-map, decisions, and action items.
+
+<p align="center">
+  <img src="./docs/assets/live-recording.png" alt="Sonote Live 2-Column Recording and Mind-Map" width="96%" />
+</p>
+
+### Post-Meeting Smart Minutes & Action Items
+Clean native Markdown typography, template re-generation, interactive checkboxes with Apple Reminders sync, and one-click Webhook / PDF / Markdown export.
+
+<p align="center">
+  <img src="./docs/assets/workspace-summary.png" alt="Sonote Smart Minutes and Action Items" width="96%" />
+</p>
+
+### Adaptive Dark Mode & Multi-Provider AI Settings
+
+<table>
+  <tr>
+    <td width="50%" align="center">
+      <img src="./docs/assets/settings-general-dark.png" alt="Sonote General Settings (Dark Mode & Accent Themes)" width="100%" /><br />
+      <sub><strong>General Settings (Dark Mode)</strong> · Light/Dark/Auto appearance, 6 accents, live EN/ZH switch & font scale</sub>
+    </td>
+    <td width="50%" align="center">
+      <img src="./docs/assets/settings-ai-models.png" alt="Sonote AI Models Settings (DeepSeek, Qwen, Built-in MLX)" width="100%" /><br />
+      <sub><strong>AI Models</strong> · First-class DeepSeek, Qwen, OpenAI, Claude, Gemini & built-in offline MLX LLM</sub>
+    </td>
+  </tr>
+</table>
+
+---
+
 ## Download & Install
 
 ### Option 1: Prebuilt DMG (Recommended)

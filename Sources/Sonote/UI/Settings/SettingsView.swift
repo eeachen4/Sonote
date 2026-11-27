@@ -62,6 +62,11 @@ struct SettingsView: View {
     }
 
     @State var selectedTab: SectionTab = .general
+
+    init(appState: AppState, initialTab: SectionTab = .general) {
+        self.appState = appState
+        self._selectedTab = State(initialValue: initialTab)
+    }
     @State var isTestingConnection = false
     @State var testResult: GPTConnectionTestResult?
     @State var discoveredAuthFiles: [String] = []
@@ -97,7 +102,7 @@ struct SettingsView: View {
 
             rightDetailCanvas
         }
-        .frame(width: 780, height: 600)
+        .frame(width: 800, height: 650)
         .background(AppTheme.canvasWhite)
         .tint(AppTheme.brandPrimary)
         .preferredColorScheme(theme.preferredColorScheme)
@@ -116,7 +121,7 @@ struct SettingsView: View {
 
     private var sidebarRail: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 8) {
+            HStack(spacing: 7) {
                 ZStack {
                     RoundedRectangle(cornerRadius: 7, style: .continuous)
                         .fill(AppTheme.brandSoftFill)
@@ -126,14 +131,18 @@ struct SettingsView: View {
                         .foregroundStyle(AppTheme.brandPrimary)
                 }
                 Text(L("Sonote 设置", "Settings"))
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.system(size: 13.5, weight: .semibold))
                     .foregroundStyle(AppTheme.textPrimary)
-                Spacer()
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+                Spacer(minLength: 4)
                 Text("v\(UpdateCheckerService.installedVersion)")
                     .font(.system(size: 10.5, weight: .medium, design: .monospaced))
                     .foregroundStyle(AppTheme.textMuted)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
             }
-            .padding(.horizontal, 16)
+            .padding(.horizontal, 14)
             .padding(.top, 36)
             .padding(.bottom, 16)
 
@@ -211,7 +220,7 @@ struct SettingsView: View {
             )
             .padding(12)
         }
-        .frame(width: 186)
+        .frame(width: 200)
         .background(AppTheme.leftPaneBg)
     }
 

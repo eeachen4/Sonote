@@ -27,6 +27,46 @@
 
 ---
 
+## 界面预览
+
+### 极简主页工作台
+自动检测会议软件状态、一键开始双轨录音 / 拖拽导入音视频 / 文本生成纪要，支持全局待办与跨会议 AI 问答。
+
+<p align="center">
+  <img src="./docs/assets/home-light.png" alt="Sonote 主页工作台（浅色模式）" width="96%" />
+</p>
+
+### 双栏实时转写与思维导图提炼
+左侧实时呈现双轨说话人分离逐字稿与「会中随手记」，右侧动态提炼结构化思维导图、决议与待办。
+
+<p align="center">
+  <img src="./docs/assets/live-recording.png" alt="Sonote 双栏实时录音转写与实时思维导图" width="96%" />
+</p>
+
+### 会后结构化纪要与待办清单
+中文友好原生 Markdown 排版、按模板重生成、交互式待办勾选（支持一键同步 Apple 提醒事项），以及多渠道导出与 Webhook 推送。
+
+<p align="center">
+  <img src="./docs/assets/workspace-summary.png" alt="Sonote 会后结构化会议纪要与待办清单" width="96%" />
+</p>
+
+### 深色主题与国产 / 离线多模型设置
+
+<table>
+  <tr>
+    <td width="50%" align="center">
+      <img src="./docs/assets/settings-general-dark.png" alt="Sonote 通用设置（深色模式 + 星云紫主题色）" width="100%" /><br />
+      <sub><strong>通用设置（深色模式）</strong> · 浅色/深色/跟随系统、6 套主题色、双语热切换与字号缩放</sub>
+    </td>
+    <td width="50%" align="center">
+      <img src="./docs/assets/settings-ai-models.png" alt="Sonote AI 模型设置（DeepSeek / 通义千问 / 内置离线 MLX）" width="100%" /><br />
+      <sub><strong>AI 模型设置</strong> · DeepSeek / 通义千问 / 更多国产预设与内置离线 MLX 引擎</sub>
+    </td>
+  </tr>
+</table>
+
+---
+
 ## 快速下载与安装
 
 ### 方式一：直接下载预编译 DMG（推荐）
