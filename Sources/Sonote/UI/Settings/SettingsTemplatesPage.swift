@@ -25,6 +25,25 @@ extension SettingsView {
 
                     Divider().overlay(AppTheme.divider)
 
+                    HStack {
+                        fieldLabel(
+                            L("纪要输出语言", "Summary Output Language"),
+                            hint: L("支持英文会议直接输出简体中文纪要，或中文会议输出英文纪要", "Summarize English calls in Chinese, or Chinese calls in English")
+                        )
+                        Spacer()
+                        Menu {
+                            ForEach(MinutesOutputLanguage.allCases) { lang in
+                                Button(lang.displayName) { appState.settings.minutesOutputLanguage = lang }
+                            }
+                        } label: {
+                            cleanMenuLabel(appState.settings.minutesOutputLanguage.displayName)
+                        }
+                        .menuStyle(.borderlessButton)
+                        .fixedSize()
+                    }
+
+                    Divider().overlay(AppTheme.divider)
+
                     SettingsToggleRow(
                         title: L("会中自动增量提炼要点", "Incremental Live Summarization"),
                         subtitle: L("仅发送新增片段，相比全量总结节省 60%+ Token", "Sends only new segments, saving 60%+ tokens"),

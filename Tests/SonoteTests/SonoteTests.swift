@@ -1113,6 +1113,65 @@ final class SonoteTests: XCTestCase {
         XCTAssertLessThan(upsampled.count, 5100)
     }
 
+    // MARK: - SonoteCore Live i18n, Summary Output Language & Lightweight Index Session Tests
+
+    func testSonoteLocaleBilingualCoreAndMinutesOutputLanguage() throws {
+        defer { SonoteLocale.isEnglish = false }
+
+        SonoteLocale.isEnglish = false
+        XCTAssertEqual(AuthMode.qwenDashScope.displayName, "通义千问 Qwen")
+        XCTAssertEqual(MinutesTemplate.techReview.displayName, "研发技术评审")
+        XCTAssertEqual(WebhookProvider.feishu.displayName, "飞书机器人卡片")
+        XCTAssertTrue(MLXModelState.idle.statusText.contains("未加载"))
+
+        SonoteLocale.isEnglish = true
+        XCTAssertEqual(AuthMode.qwenDashScope.displayName, "Alibaba Qwen")
+        XCTAssertEqual(MinutesTemplate.techReview.displayName, "Engineering Review")
+        XCTAssertEqual(WebhookProvider.feishu.displayName, "Feishu Card")
+        XCTAssertTrue(MLXModelState.idle.statusText.contains("Idle"))
+
+        // Backward-safe decoding for minutesOutputLanguage
+        let legacyJSON = #"{"authMode":"deepSeek"}"#
+        let decoded = try JSONDecoder().decode(AppSettings.self, from: Data(legacyJSON.utf8))
+        XCTAssertEqual(decoded.minutesOutputLanguage, .auto)
+
+        // Prompt directive includes explicit language instructions for English & Chinese modes
+        let enPrompt = GPTClient.shared.buildMinutesSystemInstructions(
+            modeDescription: "Final",
+            templateName: "General",
+            templateGuidance: "Standard",
+            outputLanguage: .english,
+            customDirective: ""
+        )
+        XCTAssertTrue(enPrompt.contains("professional English"))
+
+        let zhPrompt = GPTClient.shared.buildMinutesSystemInstructions(
+            modeDescription: "Final",
+            templateName: "通用会议",
+            templateGuidance: "标准",
+            outputLanguage: .zhHans,
+            customDirective: ""
+        )
+        XCTAssertTrue(zhPrompt.contains("简体中文"))
+
+        // Lightweight session hydration helper preserves key metadata
+        let full = MeetingSession(
+            title: "Hydration Check",
+            sourceAppName: "Zoom",
+            duration: 900,
+            minutes: SmartMinutes(overview: "Key summary preview", isFinalized: true),
+            tokenUsage: TokenUsage(inputTokens: 1200, outputTokens: 300, requestCount: 1),
+            tags: ["Release"]
+        )
+        let entry = MeetingIndexEntry(from: full)
+        let light = entry.toLightweightSession()
+        XCTAssertEqual(light.id, full.id)
+        XCTAssertEqual(light.title, "Hydration Check")
+        XCTAssertEqual(light.minutes.overview, "Key summary preview")
+        XCTAssertEqual(light.tags, ["Release"])
+        XCTAssertEqual(light.tokenUsage.totalTokens, 1500)
+    }
+
     // MARK: - Opt-in Live Hardware Verification for DeepFilterNet3, ECAPA-TDNN & Sortformer (SONOTE_LIVE_V15=1)
 
     func testLiveVoiceprintDenoiserAndDiarization() async throws {

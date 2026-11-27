@@ -1,5 +1,47 @@
 import Foundation
 
+/// Thread-safe language bridge so `SonoteCore` display strings follow General Settings live.
+public enum SonoteLocale {
+    private static let lock = NSLock()
+    private static var _isEnglish: Bool = false
+
+    public static var isEnglish: Bool {
+        get { lock.lock(); defer { lock.unlock() }; return _isEnglish }
+        set { lock.lock(); _isEnglish = newValue; lock.unlock() }
+    }
+
+    public static func t(_ zh: String, _ en: String) -> String {
+        isEnglish ? en : zh
+    }
+}
+
+public enum MinutesOutputLanguage: String, Codable, CaseIterable, Identifiable, Sendable {
+    case auto = "auto"
+    case zhHans = "zh-Hans"
+    case english = "en"
+
+    public var id: String { rawValue }
+
+    public var displayName: String {
+        switch self {
+        case .auto: return SonoteLocale.t("自动跟随会议语言（推荐）", "Auto (Match Transcript)")
+        case .zhHans: return SonoteLocale.t("固定输出简体中文", "Always Simplified Chinese")
+        case .english: return SonoteLocale.t("固定输出 English", "Always English")
+        }
+    }
+
+    public var promptDirective: String {
+        switch self {
+        case .auto:
+            return "语言要求：默认跟随会议逐字稿的主要语言输出纪要（中英混说会议默认使用自然流畅的简体中文并保留关键英文专业术语）。"
+        case .zhHans:
+            return "语言要求：无论原会议使用中文、英文还是其他语言，所有纪要字段（suggestedTitle、overview、topics、decisions、actionItems、openQuestions）都必须使用专业、简洁的简体中文输出（可保留专有名词与代码标识）。"
+        case .english:
+            return "Language Requirement: Regardless of the spoken language in the transcript, write ALL JSON values (suggestedTitle, overview, topics, decisions, actionItems, openQuestions) in crisp, natural professional English."
+        }
+    }
+}
+
 public enum AppInterfaceLanguage: String, Codable, CaseIterable, Identifiable, Sendable {
     case system = "system"
     case zhHans = "zh-Hans"
@@ -145,22 +187,22 @@ public enum DomesticProviderPreset: String, Codable, CaseIterable, Identifiable,
     public var shortName: String {
         switch self {
         case .kimi: return "Kimi"
-        case .zhipuGLM: return "智谱 GLM"
-        case .doubaoArk: return "豆包方舟"
-        case .siliconFlow: return "硅基流动"
+        case .zhipuGLM: return SonoteLocale.t("智谱 GLM", "Zhipu GLM")
+        case .doubaoArk: return SonoteLocale.t("豆包方舟", "Doubao Ark")
+        case .siliconFlow: return SonoteLocale.t("硅基流动", "SiliconFlow")
         case .miniMax: return "MiniMax"
-        case .hunyuan: return "腾讯混元"
+        case .hunyuan: return SonoteLocale.t("腾讯混元", "Hunyuan")
         }
     }
 
     public var displayName: String {
         switch self {
-        case .kimi: return "Kimi（月之暗面 Moonshot）"
-        case .zhipuGLM: return "智谱 GLM（BigModel）"
-        case .doubaoArk: return "豆包（火山方舟 Ark）"
-        case .siliconFlow: return "硅基流动（SiliconFlow）"
-        case .miniMax: return "MiniMax 开放平台"
-        case .hunyuan: return "腾讯混元（Hunyuan）"
+        case .kimi: return SonoteLocale.t("Kimi（月之暗面 Moonshot）", "Kimi (Moonshot AI)")
+        case .zhipuGLM: return SonoteLocale.t("智谱 GLM（BigModel）", "Zhipu GLM (BigModel)")
+        case .doubaoArk: return SonoteLocale.t("豆包（火山方舟 Ark）", "Doubao (Volcengine Ark)")
+        case .siliconFlow: return SonoteLocale.t("硅基流动（SiliconFlow）", "SiliconFlow")
+        case .miniMax: return SonoteLocale.t("MiniMax 开放平台", "MiniMax")
+        case .hunyuan: return SonoteLocale.t("腾讯混元（Hunyuan）", "Tencent Hunyuan")
         }
     }
 
@@ -209,10 +251,10 @@ public enum DomesticProviderPreset: String, Codable, CaseIterable, Identifiable,
 
     public var modelHint: String {
         switch self {
-        case .doubaoArk: return "可直接填模型名或火山方舟推理接入点 ID（ep-...）"
-        case .siliconFlow: return "聚合 DeepSeek-V3 / R1 / Qwen3 等开源旗舰模型"
-        case .kimi: return "长上下文表现优异，适合超长会议纪要与追问"
-        default: return "支持从列表选择或手动输入任意官方模型 ID"
+        case .doubaoArk: return SonoteLocale.t("可直接填模型名或火山方舟推理接入点 ID（ep-...）", "Enter a model ID or Volcengine Ark endpoint ID (ep-...)")
+        case .siliconFlow: return SonoteLocale.t("聚合 DeepSeek-V3 / R1 / Qwen3 等开源旗舰模型", "Hosts DeepSeek-V3 / R1, Qwen3 and open flagship models")
+        case .kimi: return SonoteLocale.t("长上下文表现优异，适合超长会议纪要与追问", "Strong long-context performance for lengthy meetings")
+        default: return SonoteLocale.t("支持从列表选择或手动输入任意官方模型 ID", "Pick from presets or enter any official model ID")
         }
     }
 }
@@ -232,26 +274,26 @@ public enum AuthMode: String, Codable, CaseIterable, Identifiable, Sendable {
     public var displayName: String {
         switch self {
         case .localAuthFile: return "Codex Auth"
-        case .apiKey: return "OpenAI / 本地"
+        case .apiKey: return SonoteLocale.t("OpenAI / 本地", "OpenAI / Local")
         case .deepSeek: return "DeepSeek"
-        case .qwenDashScope: return "通义千问 Qwen"
-        case .domesticCloud: return "更多国产"
+        case .qwenDashScope: return SonoteLocale.t("通义千问 Qwen", "Alibaba Qwen")
+        case .domesticCloud: return SonoteLocale.t("更多国产", "CN Presets")
         case .anthropicClaude: return "Claude"
         case .googleGemini: return "Gemini"
-        case .localMLX: return "内置离线 MLX"
+        case .localMLX: return SonoteLocale.t("内置离线 MLX", "Offline MLX")
         }
     }
 
     public var subtitle: String {
         switch self {
-        case .localAuthFile: return "自动读取 ~/.codex/auth.json 或自定义 JSON / .env 凭证文件"
-        case .apiKey: return "支持 OpenAI、自定义中转或本地 Ollama / MLX Server"
-        case .deepSeek: return "原生适配深度求索 DeepSeek-V3 / R1 推理模型，精准统计缓存命中与思考 Token"
-        case .qwenDashScope: return "原生接入阿里云百炼通义千问（Qwen3 / Qwen-Max / Qwen-Plus / Qwen-Long）"
-        case .domesticCloud: return "一键预设 Kimi、智谱 GLM、豆包火山方舟、硅基流动、MiniMax 与腾讯混元"
-        case .anthropicClaude: return "原生接入 Anthropic Claude Messages API（支持自定义代理地址）"
-        case .googleGemini: return "原生接入 Google Gemini Stream API（支持免费/付费 Key）"
-        case .localMLX: return "在 App 内直接通过 Apple Silicon Metal 运行本地 Qwen2.5-Instruct，100% 离线零 Token 费用"
+        case .localAuthFile: return SonoteLocale.t("自动读取 ~/.codex/auth.json 或自定义 JSON / .env 凭证文件", "Reads ~/.codex/auth.json or custom JSON / .env credentials")
+        case .apiKey: return SonoteLocale.t("支持 OpenAI、自定义中转或本地 Ollama / MLX Server", "Supports OpenAI, custom relays, or local Ollama / MLX Server")
+        case .deepSeek: return SonoteLocale.t("原生适配深度求索 DeepSeek-V3 / R1 推理模型，精准统计缓存命中与思考 Token", "Native DeepSeek-V3 / R1 support with cache hit & reasoning token tracking")
+        case .qwenDashScope: return SonoteLocale.t("原生接入阿里云百炼通义千问（Qwen3 / Qwen-Max / Qwen-Plus / Qwen-Long）", "Native Alibaba DashScope Qwen (Qwen3 / Qwen-Max / Plus / Long)")
+        case .domesticCloud: return SonoteLocale.t("一键预设 Kimi、智谱 GLM、豆包火山方舟、硅基流动、MiniMax 与腾讯混元", "One-click presets for Kimi, Zhipu GLM, Doubao, SiliconFlow, MiniMax & Hunyuan")
+        case .anthropicClaude: return SonoteLocale.t("原生接入 Anthropic Claude Messages API（支持自定义代理地址）", "Native Anthropic Claude Messages API with custom proxy URL support")
+        case .googleGemini: return SonoteLocale.t("原生接入 Google Gemini Stream API（支持免费/付费 Key）", "Native Google Gemini streaming API")
+        case .localMLX: return SonoteLocale.t("在 App 内直接通过 Apple Silicon Metal 运行本地 Qwen2.5-Instruct，100% 离线零 Token 费用", "Runs quantized Qwen2.5-Instruct on Apple Silicon Metal GPU — 100% offline, zero fees")
         }
     }
 }
@@ -265,9 +307,9 @@ public enum WebhookProvider: String, Codable, CaseIterable, Identifiable, Sendab
 
     public var displayName: String {
         switch self {
-        case .feishu: return "飞书机器人卡片"
-        case .dingtalk: return "钉钉机器人 Markdown"
-        case .customJSON: return "通用 JSON Webhook（Notion / n8n）"
+        case .feishu: return SonoteLocale.t("飞书机器人卡片", "Feishu Card")
+        case .dingtalk: return SonoteLocale.t("钉钉机器人 Markdown", "DingTalk Markdown")
+        case .customJSON: return SonoteLocale.t("通用 JSON Webhook（Notion / n8n）", "Custom JSON (Notion / n8n)")
         }
     }
 }
@@ -280,8 +322,8 @@ public enum DiarizationStrategy: String, Codable, CaseIterable, Identifiable, Se
 
     public var displayName: String {
         switch self {
-        case .sortformerFourSpeaker: return "Sortformer 精准分离（适合 ≤4 人会议）"
-        case .voiceprintClusteringUnlimited: return "ECAPA 声纹聚类（突破 4 人上限，支持 5~12 人大组会）"
+        case .sortformerFourSpeaker: return SonoteLocale.t("Sortformer 精准分离（适合 ≤4 人会议）", "Sortformer Precision (≤4 speakers)")
+        case .voiceprintClusteringUnlimited: return SonoteLocale.t("ECAPA 声纹聚类（突破 4 人上限，支持 5~12 人大组会）", "ECAPA Voiceprint Clustering (5–12+ speakers)")
         }
     }
 }
@@ -307,9 +349,9 @@ public enum AudioCaptureMode: String, Codable, CaseIterable, Identifiable, Senda
 
     public var displayName: String {
         switch self {
-        case .systemAndMic: return "系统声音 + 麦克风（推荐）"
-        case .systemOnly: return "仅采集系统声音（对方声音）"
-        case .micOnly: return "仅采集麦克风（本机输入）"
+        case .systemAndMic: return SonoteLocale.t("系统声音 + 麦克风（推荐）", "System Audio + Mic (Recommended)")
+        case .systemOnly: return SonoteLocale.t("仅采集系统声音（对方声音）", "System Audio Only (Remote)")
+        case .micOnly: return SonoteLocale.t("仅采集麦克风（本机输入）", "Microphone Only (Local)")
         }
     }
 
@@ -331,9 +373,9 @@ public enum TranscriptionEngine: String, Codable, CaseIterable, Identifiable, Se
 
     public var displayName: String {
         switch self {
-        case .mlxQwen3ASR: return "MLX Qwen3-ASR 本地引擎（推荐 · 中英混说高精度）"
-        case .appleSpeech: return "Apple 本机实时识别（轻量免下载）"
-        case .openAITranscribe: return "OpenAI 音频转写 API（需 API Key）"
+        case .mlxQwen3ASR: return SonoteLocale.t("MLX Qwen3-ASR 本地引擎（推荐 · 中英混说高精度）", "MLX Qwen3-ASR Local (Recommended · Bilingual)")
+        case .appleSpeech: return SonoteLocale.t("Apple 本机实时识别（轻量免下载）", "Apple On-Device Speech (Zero Download)")
+        case .openAITranscribe: return SonoteLocale.t("OpenAI 音频转写 API（需 API Key）", "OpenAI Transcribe API")
         }
     }
 }
@@ -385,11 +427,11 @@ public enum MinutesTemplate: String, Codable, CaseIterable, Identifiable, Sendab
 
     public var displayName: String {
         switch self {
-        case .general: return "通用会议"
-        case .techReview: return "研发技术评审"
-        case .interview: return "面试评估"
-        case .oneOnOne: return "1-on-1 沟通"
-        case .clientSync: return "客户与商务沟通"
+        case .general: return SonoteLocale.t("通用会议", "General Meeting")
+        case .techReview: return SonoteLocale.t("研发技术评审", "Engineering Review")
+        case .interview: return SonoteLocale.t("面试评估", "Interview Notes")
+        case .oneOnOne: return SonoteLocale.t("1-on-1 沟通", "1-on-1 Sync")
+        case .clientSync: return SonoteLocale.t("客户与商务沟通", "Client & Business")
         }
     }
 
@@ -420,7 +462,7 @@ public enum TranscriptionLanguage: String, Codable, CaseIterable, Identifiable, 
 
     public var displayName: String {
         switch self {
-        case .autoBilingual: return "自动检测（中英混说推荐）"
+        case .autoBilingual: return SonoteLocale.t("自动检测（中英混说推荐）", "Auto-Detect (ZH/EN Bilingual)")
         case .zhCN: return "简体中文 (zh-CN)"
         case .enUS: return "English (en-US)"
         case .zhTW: return "繁體中文 (zh-TW)"
@@ -471,7 +513,7 @@ public enum GlobalHotKeyModifierPreset: String, Codable, CaseIterable, Identifia
 
     public var displayName: String {
         switch self {
-        case .optionShift: return "⌥⇧R / ⌥⇧M（推荐，不与浏览器冲突）"
+        case .optionShift: return SonoteLocale.t("⌥⇧R / ⌥⇧M（推荐，不与浏览器冲突）", "⌥⇧R / ⌥⇧M (Recommended)")
         case .controlOption: return "⌃⌥R / ⌃⌥M"
         case .controlShift: return "⌃⇧R / ⌃⇧M"
         }
@@ -551,6 +593,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
 
     // Live Minutes Behavior & Custom Templates
     public var defaultMinutesTemplate: MinutesTemplate = .general
+    public var minutesOutputLanguage: MinutesOutputLanguage = .auto
     public var customTemplates: [CustomMinutesTemplate] = []
     public var liveSummaryEnabled: Bool = true
     public var liveSummaryIntervalSeconds: Int = 35
@@ -640,6 +683,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         voiceprintMatchThreshold = try c.decodeIfPresent(Float.self, forKey: .voiceprintMatchThreshold) ?? d.voiceprintMatchThreshold
 
         defaultMinutesTemplate = try c.decodeIfPresent(MinutesTemplate.self, forKey: .defaultMinutesTemplate) ?? d.defaultMinutesTemplate
+        minutesOutputLanguage = try c.decodeIfPresent(MinutesOutputLanguage.self, forKey: .minutesOutputLanguage) ?? d.minutesOutputLanguage
         customTemplates = try c.decodeIfPresent([CustomMinutesTemplate].self, forKey: .customTemplates) ?? d.customTemplates
         liveSummaryEnabled = try c.decodeIfPresent(Bool.self, forKey: .liveSummaryEnabled) ?? d.liveSummaryEnabled
         liveSummaryIntervalSeconds = try c.decodeIfPresent(Int.self, forKey: .liveSummaryIntervalSeconds) ?? d.liveSummaryIntervalSeconds

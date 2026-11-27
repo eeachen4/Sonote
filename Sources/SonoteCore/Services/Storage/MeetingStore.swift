@@ -55,6 +55,23 @@ public struct MeetingIndexEntry: Identifiable, Codable, Equatable, Sendable {
         parts.append(contentsOf: session.segments.prefix(40).map(\.text))
         self.searchableText = parts.joined(separator: " ").lowercased()
     }
+
+    /// Creates a lightweight placeholder session from index metadata for instant Home startup
+    /// before full transcript JSONs are hydrated on demand or in the background.
+    public func toLightweightSession() -> MeetingSession {
+        MeetingSession(
+            id: id,
+            title: title,
+            sourceAppName: sourceAppName,
+            startedAt: startedAt,
+            endedAt: endedAt,
+            duration: duration,
+            status: .completed,
+            minutes: SmartMinutes(overview: overviewPreview, isFinalized: true),
+            tokenUsage: TokenUsage(inputTokens: totalTokens, outputTokens: 0, requestCount: totalTokens > 0 ? 1 : 0, isEstimated: true),
+            tags: tags
+        )
+    }
 }
 
 public final class MeetingStore: @unchecked Sendable {

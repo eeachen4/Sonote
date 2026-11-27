@@ -37,11 +37,18 @@ public final class AppState: ObservableObject {
 
     @Published public var authInspection: AuthInspectionResult
     @Published public var meetings: [MeetingSession] = []
-    @Published public var selectedMeetingID: UUID?
+    @Published public var selectedMeetingID: UUID? {
+        didSet {
+            if let id = selectedMeetingID {
+                ensureMeetingLoaded(id: id)
+            }
+        }
+    }
     @Published public var activeRecordingMeetingID: UUID?
     @Published public var dailyTokenLedger: [String: TokenUsage] = [:]
     @Published public var audioStorageStats: AudioStorageStats = AudioStorageStats()
     @Published public var voiceprints: [VoiceprintProfile] = []
+    private var hydratedMeetingIDs: Set<UUID> = []
 
     // Live audio capture status & meters
     @Published public var isPaused: Bool = false
@@ -121,15 +128,58 @@ public final class AppState: ObservableObject {
         ThemeManager.shared.sync(with: loadedSettings)
         self.settings = loadedSettings
         self.authInspection = AuthManager.shared.inspect(settings: loadedSettings)
-        let loadedMeetings = MeetingStore.shared.loadMeetings()
-        self.meetings = loadedMeetings
-        self.dailyTokenLedger = MeetingStore.shared.loadTokenLedger(seedFrom: loadedMeetings)
+
+        // Fast-startup path: use meetings_index.json for O(1) instant Home rendering when library is large (>25 meetings)
+        let indexEntries = MeetingStore.shared.loadMeetingIndex()
+        if indexEntries.count > 25 {
+            self.meetings = indexEntries.map { $0.toLightweightSession() }
+            self.dailyTokenLedger = MeetingStore.shared.loadTokenLedger(seedFrom: nil)
+            self.hydrateMeetingsInBackground()
+        } else {
+            let loadedMeetings = MeetingStore.shared.loadMeetings()
+            self.meetings = loadedMeetings
+            self.hydratedMeetingIDs = Set(loadedMeetings.map(\.id))
+            self.dailyTokenLedger = MeetingStore.shared.loadTokenLedger(seedFrom: loadedMeetings)
+        }
+
         self.audioStorageStats = MeetingStore.shared.audioStorageStats()
         self.voiceprints = VoiceprintStore.shared.loadProfiles()
         // Land on the clean Home page on launch instead of jumping directly into an old recording
         self.selectedMeetingID = nil
 
         setupDetector()
+    }
+
+    /// Hydrates a single meeting's full transcript/chat JSON from disk on demand (O(1) file read).
+    public func ensureMeetingLoaded(id: UUID) {
+        guard !hydratedMeetingIDs.contains(id) else { return }
+        if let full = store.loadMeeting(id: id),
+           let idx = meetings.firstIndex(where: { $0.id == id }) {
+            meetings[idx] = full
+            hydratedMeetingIDs.insert(id)
+        }
+    }
+
+    private func hydrateMeetingsInBackground() {
+        let storeRef = self.store
+        Task.detached(priority: .utility) { [weak self] in
+            let fullMeetings = storeRef.loadMeetings()
+            await MainActor.run { [weak self] in
+                guard let self else { return }
+                var byID: [UUID: MeetingSession] = [:]
+                for m in fullMeetings { byID[m.id] = m }
+                for idx in self.meetings.indices {
+                    let id = self.meetings[idx].id
+                    if !self.hydratedMeetingIDs.contains(id), let full = byID[id] {
+                        self.meetings[idx] = full
+                        self.hydratedMeetingIDs.insert(id)
+                    }
+                }
+                if self.dailyTokenLedger.isEmpty {
+                    self.dailyTokenLedger = self.store.loadTokenLedger(seedFrom: fullMeetings)
+                }
+            }
+        }
     }
 
     // MARK: - Computed Helpers
@@ -353,7 +403,9 @@ public final class AppState: ObservableObject {
     }
 
     public func updateMeeting(id: UUID, persist: Bool = true, _ mutate: (inout MeetingSession) -> Void) {
+        ensureMeetingLoaded(id: id)
         guard let idx = meetings.firstIndex(where: { $0.id == id }) else { return }
+        hydratedMeetingIDs.insert(id)
         mutate(&meetings[idx])
         if persist {
             store.saveMeeting(meetings[idx])

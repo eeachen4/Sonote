@@ -143,6 +143,7 @@ public final class GPTClient: @unchecked Sendable {
             modeDescription: modeDescription,
             templateName: resolvedTemplate.name,
             templateGuidance: resolvedTemplate.guidance,
+            outputLanguage: settings.minutesOutputLanguage,
             customDirective: customDirective
         )
 
@@ -220,6 +221,7 @@ public final class GPTClient: @unchecked Sendable {
             modeDescription: "这是一场超长会议的分段汇总结果，请将所有分段纪要与用户手动笔记融合、去重并整理为一份结构统一、逻辑连贯的最终版智能会议纪要。",
             templateName: resolvedTemplate.name,
             templateGuidance: resolvedTemplate.guidance,
+            outputLanguage: settings.minutesOutputLanguage,
             customDirective: customDirective
         )
 
@@ -256,15 +258,18 @@ public final class GPTClient: @unchecked Sendable {
         return (meeting.template.displayName, meeting.template.promptGuidance)
     }
 
-    private func buildMinutesSystemInstructions(
+    public func buildMinutesSystemInstructions(
         modeDescription: String,
         templateName: String,
         templateGuidance: String,
+        outputLanguage: MinutesOutputLanguage = .auto,
         customDirective: String
     ) -> String {
         """
-        你是参考「豆包工作智能会议纪要」设计的专业中文会议记录专家。
+        你是参考「豆包工作智能会议纪要」设计的专业会议记录专家。
         \(modeDescription)
+
+        \(outputLanguage.promptDirective)
 
         场景模板指引（\(templateName)）：
         \(templateGuidance)

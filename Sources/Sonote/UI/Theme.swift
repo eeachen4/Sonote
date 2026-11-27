@@ -34,9 +34,11 @@ public final class ThemeManager: ObservableObject {
     }
 
     public func sync(with settings: AppSettings) {
+        let isEn = settings.interfaceLanguage.resolvedIsEnglish
         AppTheme.activeAccent = settings.accentTheme
         AppTheme.activeFontScale = settings.fontScale
-        AppTheme.activeIsEnglish = settings.interfaceLanguage.resolvedIsEnglish
+        AppTheme.activeIsEnglish = isEn
+        SonoteLocale.isEnglish = isEn
 
         if appearance != settings.appearanceMode {
             appearance = settings.appearanceMode

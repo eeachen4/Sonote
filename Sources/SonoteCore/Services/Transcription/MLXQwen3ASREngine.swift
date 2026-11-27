@@ -16,7 +16,7 @@ public enum MLXModelState: Equatable, Sendable {
     public var statusText: String {
         switch self {
         case .idle:
-            return "未加载（录制时按需加载，待机不占内存）"
+            return SonoteLocale.t("未加载（录制时按需加载，待机不占内存）", "Idle (loads on demand; 0 MB idle GPU memory)")
         case .downloading(let progress, let msg):
             if progress > 0 && progress <= 1.0 {
                 return "\(msg) (\(Int(progress * 100))%)"
@@ -27,11 +27,13 @@ public enum MLXModelState: Equatable, Sendable {
         case .ready(let modelID, let peakGB):
             let shortName = modelID.split(separator: "/").last.map(String.init) ?? modelID
             if peakGB > 0.05 {
-                return String(format: "已就绪 · %@ (峰值 %.2f GB)", shortName, peakGB)
+                return SonoteLocale.isEnglish
+                    ? String(format: "Ready · %@ (peak %.2f GB)", shortName, peakGB)
+                    : String(format: "已就绪 · %@ (峰值 %.2f GB)", shortName, peakGB)
             }
-            return "已就绪 · \(shortName)"
+            return SonoteLocale.t("已就绪 · \(shortName)", "Ready · \(shortName)")
         case .failed(let err):
-            return "加载失败：\(err)"
+            return SonoteLocale.t("加载失败：\(err)", "Load failed: \(err)")
         }
     }
 

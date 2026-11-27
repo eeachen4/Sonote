@@ -88,6 +88,7 @@ struct CompletedMeetingDocumentView: View {
     @State var editingSegmentDraft: String = ""
     @State var showAddTagPopover: Bool = false
     @State var newTagDraft: String = ""
+    @State var showStreamingPreview: Bool = true
     @FocusState var isComposerFocused: Bool
 
     var hasNoRecognizedContent: Bool {
@@ -134,18 +135,8 @@ struct CompletedMeetingDocumentView: View {
 
                             // Document Content
                             if meeting.status == .summarizing || appState.isGeneratingMinutes {
-                                VStack(alignment: .leading, spacing: 12) {
-                                    HStack(spacing: 8) {
-                                        ProgressView().controlSize(.small)
-                                        Text(L("正在整理会议纪要...", "Generating structured minutes..."))
-                                            .font(.system(size: 14))
-                                            .foregroundStyle(AppTheme.textSecondary)
-                                    }
-                                    SkeletonPill(width: 280, height: 12)
-                                    SkeletonPill(width: 420, height: 12)
-                                    SkeletonPill(width: 220, height: 12)
-                                }
-                                .padding(.top, 32)
+                                summarizingProgressCard
+                                    .padding(.top, 28)
                             } else if hasNoRecognizedContent {
                                 Text(L("未识别到文字内容", "No transcript content recognized"))
                                     .font(.system(size: 14.5))
@@ -602,6 +593,71 @@ struct CompletedMeetingDocumentView: View {
                     .contentShape(Capsule())
             }
             .buttonStyle(.plain)
+        }
+    }
+
+    // MARK: - Live AI Streaming Progress Card
+
+    private var summarizingProgressCard: some View {
+        let raw = appState.aiStreamingPreview
+        let isReasoning = raw.contains("<think>") && !raw.contains("</think>")
+        let charCount = raw.count
+        let tailPreview: String = {
+            let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmed.count <= 320 { return trimmed }
+            return "…" + String(trimmed.suffix(320))
+        }()
+
+        return VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                ProgressView().controlSize(.small)
+                Text(
+                    isReasoning
+                        ? L("深度推理思考中...", "Reasoning through meeting context...")
+                        : L("正在整理结构化会议纪要...", "Generating structured meeting minutes...")
+                )
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(AppTheme.textPrimary)
+
+                if charCount > 0 {
+                    Text(L("已生成 \(charCount) 字", "\(charCount) chars"))
+                        .font(.system(size: 11, weight: .medium, design: .monospaced))
+                        .foregroundStyle(AppTheme.brandPrimary)
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 2)
+                        .background(Capsule().fill(AppTheme.brandSoftFill))
+                }
+
+                Spacer()
+
+                if charCount > 0 {
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.14)) {
+                            showStreamingPreview.toggle()
+                        }
+                    } label: {
+                        Text(showStreamingPreview ? L("隐藏流式预览", "Hide Stream") : L("查看流式预览", "Show Stream"))
+                            .font(.system(size: 11.5))
+                            .foregroundStyle(AppTheme.textSecondary)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+
+            if charCount > 0 && showStreamingPreview {
+                Text(tailPreview)
+                    .font(.system(size: 11.5, design: .monospaced))
+                    .foregroundStyle(AppTheme.textSecondary)
+                    .lineSpacing(3.5)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(12)
+                    .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(AppTheme.softCardBg))
+                    .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(AppTheme.subtleBorder, lineWidth: 1))
+            } else {
+                SkeletonPill(width: 280, height: 12)
+                SkeletonPill(width: 420, height: 12)
+                SkeletonPill(width: 220, height: 12)
+            }
         }
     }
 
