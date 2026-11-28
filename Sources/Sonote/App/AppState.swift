@@ -134,6 +134,7 @@ public final class AppState: ObservableObject {
     @Published public var isGeneratingMinutes: Bool = false
     @Published public var isAskingAI: Bool = false
     @Published public var isDiarizing: Bool = false
+    @Published public var isRetranscribing: Bool = false
     @Published public var isInferringSpeakers: Bool = false
     @Published public var isEnrollingVoiceprint: Bool = false
     @Published public var voiceprintEnrollProgress: Double = 0
@@ -151,10 +152,12 @@ public final class AppState: ObservableObject {
     @Published public var pendingDetectedMeeting: DetectedMeetingApp?
     @Published public var pendingEndedMeeting: DetectedMeetingApp?
 
-    // Floating capsule & live subtitle bar visibility
+    // Floating capsule, live subtitle bar & smart live highlight
     @Published public var isCapsuleVisible: Bool = false
     @Published public var isSubtitleBarVisible: Bool = false
     @Published public var liveSubtitleTranslation: String = ""
+    @Published public var pendingLiveStarHighlight: Bool = false
+    @Published public var lastLiveHighlightFlash: String? = nil
 
     // Crash recovery banner for an abnormally interrupted prior recording
     @Published public var recoveredInterruptedMeetingID: UUID? = nil
@@ -175,6 +178,7 @@ public final class AppState: ObservableObject {
     var lastSummarizedSegmentCount: Int = 0
     var lastSummarizedManualNotes: String = ""
     var activeAskAITask: Task<Void, Never>?
+    var activeImportTask: Task<Void, Never>?
     var activeSubtitleTranslationTask: Task<Void, Never>?
     var subtitleTranslationGeneration: UInt64 = 0
     let recordingClock = RecordingClock()

@@ -599,6 +599,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
     public var liveSummaryIntervalSeconds: Int = 35
     public var showFloatingCapsuleWhileRecording: Bool = true
     public var enableLiveSubtitleTranslation: Bool = false
+    public var liveSubtitleFontSize: Double = 14
     public var customMinutesPrompt: String = ""
     public var customAskAIPrompts: [String] = []
 
@@ -691,6 +692,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         liveSummaryIntervalSeconds = try c.decodeIfPresent(Int.self, forKey: .liveSummaryIntervalSeconds) ?? d.liveSummaryIntervalSeconds
         showFloatingCapsuleWhileRecording = try c.decodeIfPresent(Bool.self, forKey: .showFloatingCapsuleWhileRecording) ?? d.showFloatingCapsuleWhileRecording
         enableLiveSubtitleTranslation = try c.decodeIfPresent(Bool.self, forKey: .enableLiveSubtitleTranslation) ?? d.enableLiveSubtitleTranslation
+        liveSubtitleFontSize = try c.decodeIfPresent(Double.self, forKey: .liveSubtitleFontSize) ?? d.liveSubtitleFontSize
         customMinutesPrompt = try c.decodeIfPresent(String.self, forKey: .customMinutesPrompt) ?? d.customMinutesPrompt
         customAskAIPrompts = try c.decodeIfPresent([String].self, forKey: .customAskAIPrompts) ?? d.customAskAIPrompts
 

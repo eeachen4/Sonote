@@ -99,7 +99,9 @@ struct CompletedMeetingDocumentView: View {
     @State var showStreamingPreview: Bool = true
     @State var glossarySuggestions: [String] = []
     @State var pendingScrollSegmentID: UUID? = nil
+    @State var showRetranscribeDialog: Bool = false
     @FocusState var isComposerFocused: Bool
+    @FocusState var isTranscriptSearchFocused: Bool
 
     var hasNoRecognizedContent: Bool {
         meeting.segments.isEmpty
@@ -218,7 +220,15 @@ struct CompletedMeetingDocumentView: View {
                                             .font(.system(size: 14))
                                             .foregroundStyle(AppTheme.textSecondary)
                                     } else {
-                                        DoubaoMindMapView(meeting: meeting, appState: appState)
+                                        DoubaoMindMapView(
+                                            meeting: meeting,
+                                            appState: appState,
+                                            onJumpToTimestamp: meeting.segments.isEmpty ? nil : { ts in
+                                                jumpToTimestampCitation(ts)
+                                            },
+                                            isExportable: true,
+                                            onToast: { showToast($0) }
+                                        )
                                     }
 
                                 case .transcript:
@@ -318,6 +328,34 @@ struct CompletedMeetingDocumentView: View {
                 .opacity(0)
                 .frame(width: 0, height: 0)
             }
+
+            // Native macOS workspace keyboard shortcuts (⌘1-4 tabs, ⌘E edit, ⌘F search transcript, ⌘[ back Home)
+            Group {
+                Button("") { switchTab(.summary) }.keyboardShortcut("1", modifiers: .command)
+                Button("") { switchTab(.mindMap) }.keyboardShortcut("2", modifiers: .command)
+                Button("") { switchTab(.transcript) }.keyboardShortcut("3", modifiers: .command)
+                Button("") { switchTab(.askAI) }.keyboardShortcut("4", modifiers: .command)
+                Button("") {
+                    if isEditingSummary {
+                        commitEditing()
+                    } else if !meeting.minutes.isEmpty {
+                        activeTab = .summary
+                        beginEditing()
+                    }
+                }.keyboardShortcut("e", modifiers: .command)
+                Button("") {
+                    if isEditingSummary { commitEditing() }
+                    activeTab = .transcript
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) {
+                        isTranscriptSearchFocused = true
+                    }
+                }.keyboardShortcut("f", modifiers: .command)
+                Button("") {
+                    if !isEditingSummary { onBackHome() }
+                }.keyboardShortcut("[", modifiers: .command)
+            }
+            .opacity(0)
+            .frame(width: 0, height: 0)
         }
         .onAppear {
             audioPlayer.loadIfNeeded(path: meeting.audioFilePath)
@@ -511,6 +549,15 @@ struct CompletedMeetingDocumentView: View {
                     .buttonStyle(.plain)
                 }
             }
+        }
+    }
+
+    func switchTab(_ tab: DocTab) {
+        if isEditingSummary && tab != .summary {
+            commitEditing()
+        }
+        withAnimation(.easeInOut(duration: 0.14)) {
+            activeTab = tab
         }
     }
 

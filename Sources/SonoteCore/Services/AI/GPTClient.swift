@@ -188,6 +188,14 @@ public final class GPTClient: @unchecked Sendable {
             userPrompt += "\n\n【用户会中手动笔记（高优先级）】\n\(meeting.manualNotes)"
         }
 
+        let starredSegments = meeting.segments.filter(\.isStarred)
+        if !starredSegments.isEmpty {
+            let highlightedLines = starredSegments.prefix(25).map { seg in
+                "[\(seg.formattedTimestamp)] [\(seg.resolvedSpeakerName)] \(seg.text)"
+            }.joined(separator: "\n")
+            userPrompt += "\n\n【用户标星重点片段（高优先级，请重点体现并保留对应时间戳）】\n\(highlightedLines)"
+        }
+
         if isIncremental, let deltaSegs = deltaSegmentsOnly {
             userPrompt += "\n\n【上一版实时纪要（请在此基础上增量合并更新）】\n\(Self.encodeCompactMinutesJSON(meeting.minutes))"
             let deltaText = deltaSegs.map { seg in
@@ -258,6 +266,13 @@ public final class GPTClient: @unchecked Sendable {
         }
         if !meeting.manualNotes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             reducePrompt += "\n\n【用户会中手动笔记（高优先级）】\n\(meeting.manualNotes)"
+        }
+        let starredSegments = meeting.segments.filter(\.isStarred)
+        if !starredSegments.isEmpty {
+            let highlightedLines = starredSegments.prefix(25).map { seg in
+                "[\(seg.formattedTimestamp)] [\(seg.resolvedSpeakerName)] \(seg.text)"
+            }.joined(separator: "\n")
+            reducePrompt += "\n\n【用户标星重点片段（高优先级）】\n\(highlightedLines)"
         }
         reducePrompt += "\n\n【全会议分段提炼结果】\n" + stageSummaries.joined(separator: "\n\n")
 

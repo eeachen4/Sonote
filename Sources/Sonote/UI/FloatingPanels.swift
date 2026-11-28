@@ -345,6 +345,19 @@ struct LiveCapsuleView: View {
                 Spacer(minLength: 4)
 
                 Button {
+                    appState.highlightCurrentLiveMoment()
+                } label: {
+                    Image(systemName: appState.pendingLiveStarHighlight ? "star.fill" : "star")
+                        .font(.system(size: 11.5, weight: .semibold))
+                        .foregroundStyle(appState.pendingLiveStarHighlight ? AppTheme.warningAmber : AppTheme.textSecondary)
+                        .frame(width: 26, height: 26)
+                        .background(Circle().fill(appState.pendingLiveStarHighlight ? AppTheme.warningAmber.opacity(0.16) : AppTheme.softCardBg))
+                        .contentShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .help(L("一键标星当前关键时刻", "Highlight current moment"))
+
+                Button {
                     appState.toggleSubtitleBar()
                 } label: {
                     Image(systemName: appState.isSubtitleBarVisible ? "captions.bubble.fill" : "captions.bubble")
@@ -500,7 +513,11 @@ struct MiniDottedWaveformView: View {
 
 @MainActor
 final class LiveSubtitlePanelController {
+    private static let originXKey = "sonote.subtitleBar.originX"
+    private static let originYKey = "sonote.subtitleBar.originY"
+
     private var panel: FloatingHUDPanel?
+    private var moveObserver: NSObjectProtocol?
 
     func setVisible(_ visible: Bool, appState: AppState) {
         if visible {
@@ -516,19 +533,20 @@ final class LiveSubtitlePanelController {
             return
         }
 
-        let width: CGFloat = 640
-        let height: CGFloat = 86
-        let screenFrame = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
-        let frame = NSRect(
-            x: screenFrame.midX - width / 2,
-            y: screenFrame.minY + 42,
-            width: width,
-            height: height
-        )
+        let width: CGFloat = 660
+        let height = Self.panelHeight(for: appState.settings.liveSubtitleFontSize)
+        let origin = Self.restoredOrigin(width: width, height: height)
+        let frame = NSRect(origin: origin, size: NSSize(width: width, height: height))
 
         let panel = FloatingHUDPanel(contentRect: frame)
         let hosting = AcceptsFirstMouseHostingView(
-            rootView: LiveSubtitleOverlayView(appState: appState, width: width, height: height)
+            rootView: LiveSubtitleOverlayView(
+                appState: appState,
+                width: width,
+                onFontSizeChanged: { [weak self] newSize in
+                    self?.resizeForFontSize(newSize)
+                }
+            )
         )
         hosting.sizingOptions = []
         hosting.frame = NSRect(x: 0, y: 0, width: width, height: height)
@@ -537,6 +555,18 @@ final class LiveSubtitlePanelController {
         panel.alphaValue = 0
         panel.orderFrontRegardless()
 
+        moveObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.didMoveNotification,
+            object: panel,
+            queue: .main
+        ) { [weak panel] _ in
+            Task { @MainActor in
+                guard let origin = panel?.frame.origin else { return }
+                UserDefaults.standard.set(Double(origin.x), forKey: Self.originXKey)
+                UserDefaults.standard.set(Double(origin.y), forKey: Self.originYKey)
+            }
+        }
+
         NSAnimationContext.runAnimationGroup { ctx in
             ctx.duration = 0.18
             panel.animator().alphaValue = 1
@@ -544,9 +574,49 @@ final class LiveSubtitlePanelController {
         self.panel = panel
     }
 
+    private func resizeForFontSize(_ fontSize: Double) {
+        guard let panel else { return }
+        let newHeight = Self.panelHeight(for: fontSize)
+        var frame = panel.frame
+        frame.size.height = newHeight
+        panel.setFrame(frame, display: true, animate: true)
+        panel.contentView?.frame = NSRect(x: 0, y: 0, width: frame.width, height: newHeight)
+    }
+
     func hide() {
+        if let origin = panel?.frame.origin {
+            UserDefaults.standard.set(Double(origin.x), forKey: Self.originXKey)
+            UserDefaults.standard.set(Double(origin.y), forKey: Self.originYKey)
+        }
+        if let moveObserver {
+            NotificationCenter.default.removeObserver(moveObserver)
+            self.moveObserver = nil
+        }
         panel?.orderOut(nil)
         panel = nil
+    }
+
+    private static func panelHeight(for fontSize: Double) -> CGFloat {
+        let clamped = min(18, max(12, fontSize))
+        return CGFloat(82 + (clamped - 12) * 4.5)
+    }
+
+    private static func restoredOrigin(width: CGFloat, height: CGFloat) -> CGPoint {
+        let fallbackScreen = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
+        let defaultOrigin = CGPoint(x: fallbackScreen.midX - width / 2, y: fallbackScreen.minY + 42)
+        guard UserDefaults.standard.object(forKey: originXKey) != nil,
+              UserDefaults.standard.object(forKey: originYKey) != nil else {
+            return defaultOrigin
+        }
+        let saved = CGPoint(
+            x: UserDefaults.standard.double(forKey: originXKey),
+            y: UserDefaults.standard.double(forKey: originYKey)
+        )
+        // Ensure saved point stays visible on a currently attached monitor (handles external display unplug)
+        let targetScreen = NSScreen.screens.first(where: { $0.visibleFrame.insetBy(dx: -80, dy: -80).contains(saved) })?.visibleFrame ?? fallbackScreen
+        let clampedX = min(max(targetScreen.minX + 12, saved.x), max(targetScreen.minX + 12, targetScreen.maxX - width - 12))
+        let clampedY = min(max(targetScreen.minY + 12, saved.y), max(targetScreen.minY + 12, targetScreen.maxY - height - 12))
+        return CGPoint(x: clampedX, y: clampedY)
     }
 }
 
@@ -554,7 +624,11 @@ struct LiveSubtitleOverlayView: View {
     @ObservedObject var appState: AppState
     @ObservedObject private var theme = ThemeManager.shared
     let width: CGFloat
-    let height: CGFloat
+    var onFontSizeChanged: ((Double) -> Void)? = nil
+
+    private var captionFontSize: Double {
+        min(18, max(12, appState.settings.liveSubtitleFontSize))
+    }
 
     private var captionTuple: (speaker: String, text: String) {
         if !appState.volatileRemoteText.isEmpty {
@@ -573,7 +647,7 @@ struct LiveSubtitleOverlayView: View {
     var body: some View {
         let cap = captionTuple
         VStack(alignment: .leading, spacing: 5) {
-            HStack(spacing: 8) {
+            HStack(spacing: 7) {
                 HStack(spacing: 5) {
                     Circle()
                         .fill(appState.isPaused ? AppTheme.warningAmber : AppTheme.brandPrimary)
@@ -587,6 +661,42 @@ struct LiveSubtitleOverlayView: View {
                 .background(Capsule().fill(Color.white.opacity(0.12)))
 
                 Spacer()
+
+                // Font Size A- / A+ stepper
+                HStack(spacing: 2) {
+                    Button {
+                        let next = max(12, captionFontSize - 2)
+                        appState.settings.liveSubtitleFontSize = next
+                        onFontSizeChanged?(next)
+                    } label: {
+                        Text("A-")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(captionFontSize <= 12 ? Color.white.opacity(0.32) : Color.white.opacity(0.78))
+                            .frame(width: 22, height: 19)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(captionFontSize <= 12)
+                    .help(L("缩小字幕字号", "Smaller caption font"))
+
+                    Button {
+                        let next = min(18, captionFontSize + 2)
+                        appState.settings.liveSubtitleFontSize = next
+                        onFontSizeChanged?(next)
+                    } label: {
+                        Text("A+")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(captionFontSize >= 18 ? Color.white.opacity(0.32) : Color.white.opacity(0.78))
+                            .frame(width: 22, height: 19)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(captionFontSize >= 18)
+                    .help(L("放大字幕字号", "Larger caption font"))
+                }
+                .padding(.horizontal, 4)
+                .padding(.vertical, 1)
+                .background(Capsule().fill(Color.white.opacity(0.10)))
 
                 Button {
                     appState.settings.enableLiveSubtitleTranslation.toggle()
@@ -622,14 +732,14 @@ struct LiveSubtitleOverlayView: View {
             }
 
             Text(cap.text)
-                .font(.system(size: 14, weight: .medium))
+                .font(.system(size: CGFloat(captionFontSize), weight: .medium))
                 .foregroundStyle(Color.white)
                 .lineLimit(appState.liveSubtitleTranslation.isEmpty ? 2 : 1)
                 .truncationMode(.head)
 
             if !appState.liveSubtitleTranslation.isEmpty {
                 Text(appState.liveSubtitleTranslation)
-                    .font(.system(size: 12.5))
+                    .font(.system(size: CGFloat(max(11, captionFontSize - 1.5))))
                     .foregroundStyle(Color.white.opacity(0.76))
                     .lineLimit(1)
                     .truncationMode(.tail)
@@ -637,7 +747,8 @@ struct LiveSubtitleOverlayView: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
-        .frame(width: width, height: height, alignment: .leading)
+        .frame(width: width, alignment: .leading)
+        .frame(maxHeight: .infinity, alignment: .center)
         .background(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .fill(Color(red: 0.08, green: 0.09, blue: 0.12).opacity(0.86))

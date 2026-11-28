@@ -1,4 +1,6 @@
 import SwiftUI
+import AppKit
+import UniformTypeIdentifiers
 import SonoteCore
 
 /// Right-hand "实时总结" pane matching Doubao Work's exact minimalist aesthetic:
@@ -197,14 +199,117 @@ struct SmartMinutesPaneView: View {
     }
 }
 
-// MARK: - Doubao-Style Clean Vertical Branching Mind-Map View
+// MARK: - Doubao-Style Interactive Collapsible Vertical Branching Mind-Map View
 
 struct DoubaoMindMapView: View {
     let meeting: MeetingSession
     @ObservedObject var appState: AppState
     @ObservedObject private var theme = ThemeManager.shared
+    var onJumpToTimestamp: ((TimeInterval) -> Void)? = nil
+    var isExportable: Bool = false
+    var onToast: ((String) -> Void)? = nil
+
+    @State private var collapsedBranches: Set<String> = []
+    @State private var citationCache: [String: MinutesTimestampMatcher.Match] = [:]
+
+    private var citationCacheKey: String {
+        let m = meeting.minutes
+        return "mm|\(meeting.id.uuidString)|\(m.lastUpdatedAt.timeIntervalSince1970)|\(meeting.segments.count)|\(m.topics.count)|\(m.decisions.count)|\(m.actionItems.count)|\(m.openQuestions.count)|\(onJumpToTimestamp != nil)"
+    }
+
+    private var allBranchKeys: [String] {
+        var keys: [String] = []
+        if !meeting.minutes.overview.isEmpty { keys.append("overview") }
+        for topic in meeting.minutes.topics { keys.append("topic-\(topic.id.uuidString)") }
+        if !meeting.minutes.decisions.isEmpty { keys.append("decisions") }
+        if !meeting.minutes.actionItems.isEmpty { keys.append("actions") }
+        if !meeting.minutes.openQuestions.isEmpty { keys.append("questions") }
+        return keys
+    }
 
     var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            if isExportable && meeting.minutes.rawMarkdownFallback == nil && !allBranchKeys.isEmpty {
+                mindMapToolbar
+            }
+
+            mindMapCanvas(interactive: true)
+        }
+        .task(id: citationCacheKey) {
+            rebuildCitationCache()
+        }
+    }
+
+    private var mindMapToolbar: some View {
+        let allCollapsed = !allBranchKeys.isEmpty && allBranchKeys.allSatisfy { collapsedBranches.contains($0) }
+        return HStack(spacing: 8) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.16)) {
+                    if allCollapsed {
+                        collapsedBranches.removeAll()
+                    } else {
+                        collapsedBranches = Set(allBranchKeys)
+                    }
+                }
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: allCollapsed ? "rectangle.expand.vertical" : "rectangle.compress.vertical")
+                        .font(.system(size: 10.5))
+                    Text(allCollapsed ? L("展开全部", "Expand All") : L("折叠全部", "Collapse All"))
+                        .font(.system(size: 11.5, weight: .medium))
+                }
+                .foregroundStyle(AppTheme.textSecondary)
+                .padding(.horizontal, 9)
+                .padding(.vertical, 4.5)
+                .background(Capsule().fill(AppTheme.softCardBg))
+                .overlay(Capsule().strokeBorder(AppTheme.subtleBorder, lineWidth: 0.8))
+                .contentShape(Capsule())
+            }
+            .buttonStyle(.plain)
+
+            Spacer()
+
+            Button {
+                appState.copyMermaidMindMapToClipboard(for: meeting)
+                onToast?(L("已复制 Mermaid 导图代码", "Copied Mermaid"))
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "doc.on.doc")
+                        .font(.system(size: 10.5))
+                    Text(L("复制 Mermaid", "Copy Mermaid"))
+                        .font(.system(size: 11.5, weight: .medium))
+                }
+                .foregroundStyle(AppTheme.textSecondary)
+                .padding(.horizontal, 9)
+                .padding(.vertical, 4.5)
+                .background(Capsule().fill(AppTheme.softCardBg))
+                .overlay(Capsule().strokeBorder(AppTheme.subtleBorder, lineWidth: 0.8))
+                .contentShape(Capsule())
+            }
+            .buttonStyle(.plain)
+
+            Button {
+                exportMindMapPNG()
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "photo.badge.arrow.down")
+                        .font(.system(size: 10.5))
+                    Text(L("导出 PNG 图片", "Export PNG"))
+                        .font(.system(size: 11.5, weight: .medium))
+                }
+                .foregroundStyle(AppTheme.brandPrimary)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 4.5)
+                .background(Capsule().fill(AppTheme.brandSoftFill))
+                .contentShape(Capsule())
+            }
+            .buttonStyle(.plain)
+            .help(L("将思维导图导出为高清 2× Retina PNG 图片", "Export mind-map as a crisp 2× Retina PNG image"))
+        }
+    }
+
+    @ViewBuilder
+    private func mindMapCanvas(interactive: Bool) -> some View {
         VStack(alignment: .leading, spacing: 16) {
             if let fallback = meeting.minutes.rawMarkdownFallback, !fallback.isEmpty {
                 MarkdownContentView(markdown: fallback, fontSize: 13.5)
@@ -223,23 +328,51 @@ struct DoubaoMindMapView: View {
                 // Child branches connected by clean vertical spine
                 VStack(alignment: .leading, spacing: 14) {
                     if !meeting.minutes.overview.isEmpty {
-                        mindMapBranch(title: L("会议概览", "Overview"), items: [meeting.minutes.overview])
+                        mindMapBranch(
+                            key: "overview",
+                            title: L("会议概览", "Overview"),
+                            items: [meeting.minutes.overview],
+                            interactive: interactive,
+                            allowCitations: false
+                        )
                     }
 
                     ForEach(meeting.minutes.topics) { topic in
-                        mindMapBranch(title: topic.title, items: topic.points)
+                        mindMapBranch(
+                            key: "topic-\(topic.id.uuidString)",
+                            title: topic.title,
+                            items: topic.points,
+                            interactive: interactive,
+                            allowCitations: true
+                        )
                     }
 
                     if !meeting.minutes.decisions.isEmpty {
-                        mindMapBranch(title: L("关键决议", "Key Decisions"), items: meeting.minutes.decisions)
+                        mindMapBranch(
+                            key: "decisions",
+                            title: L("关键决议", "Key Decisions"),
+                            items: meeting.minutes.decisions,
+                            interactive: interactive,
+                            allowCitations: true
+                        )
                     }
 
                     if !meeting.minutes.actionItems.isEmpty {
-                        mindMapActionBranch(items: meeting.minutes.actionItems)
+                        mindMapActionBranch(
+                            key: "actions",
+                            items: meeting.minutes.actionItems,
+                            interactive: interactive
+                        )
                     }
 
                     if !meeting.minutes.openQuestions.isEmpty {
-                        mindMapBranch(title: L("待确认问题", "Open Questions"), items: meeting.minutes.openQuestions)
+                        mindMapBranch(
+                            key: "questions",
+                            title: L("待确认问题", "Open Questions"),
+                            items: meeting.minutes.openQuestions,
+                            interactive: interactive,
+                            allowCitations: true
+                        )
                     }
                 }
                 .padding(.leading, 18)
@@ -254,35 +387,170 @@ struct DoubaoMindMapView: View {
         }
     }
 
-    private func mindMapBranch(title: String, items: [String]) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+    private func mindMapBranch(
+        key: String,
+        title: String,
+        items: [String],
+        interactive: Bool,
+        allowCitations: Bool
+    ) -> some View {
+        let isCollapsed = interactive && collapsedBranches.contains(key)
+        return VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
                 Rectangle()
                     .fill(AppTheme.mindMapLine)
                     .frame(width: 12, height: 1.5)
-                Text(title)
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(AppTheme.textPrimary)
+
+                Button {
+                    guard interactive else { return }
+                    withAnimation(.easeInOut(duration: 0.16)) {
+                        if collapsedBranches.contains(key) {
+                            collapsedBranches.remove(key)
+                        } else {
+                            collapsedBranches.insert(key)
+                        }
+                    }
+                } label: {
+                    HStack(spacing: 6) {
+                        if interactive {
+                            Image(systemName: isCollapsed ? "chevron.right" : "chevron.down")
+                                .font(.system(size: 9, weight: .semibold))
+                                .foregroundStyle(AppTheme.brandPrimary.opacity(0.75))
+                                .frame(width: 10)
+                        }
+                        Text(title)
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(AppTheme.textPrimary)
+                        if isCollapsed && !items.isEmpty {
+                            Text("\(items.count)")
+                                .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                                .foregroundStyle(AppTheme.brandPrimary)
+                                .padding(.horizontal, 5.5)
+                                .padding(.vertical, 1)
+                                .background(Capsule().fill(AppTheme.brandSoftFill))
+                        }
+                    }
                     .padding(.horizontal, 12)
                     .padding(.vertical, 7)
                     .background(
                         RoundedRectangle(cornerRadius: 8, style: .continuous)
                             .fill(AppTheme.mindMapNodeFill)
                     )
+                    .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                }
+                .buttonStyle(.plain)
             }
 
-            if !items.isEmpty {
+            if !isCollapsed && !items.isEmpty {
                 VStack(alignment: .leading, spacing: 6) {
-                    ForEach(items, id: \.self) { point in
+                    ForEach(Array(items.enumerated()), id: \.offset) { _, point in
+                        let citation = (interactive && allowCitations && onJumpToTimestamp != nil) ? citationCache[point] : nil
                         HStack(alignment: .top, spacing: 7) {
                             Circle()
                                 .fill(AppTheme.brandPrimary.opacity(0.5))
                                 .frame(width: 4.5, height: 4.5)
                                 .padding(.top, 6)
-                            inlineMarkdownText(point)
+                            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                                inlineMarkdownText(citation?.displayText ?? point)
+                                    .font(.system(size: 13))
+                                    .foregroundStyle(AppTheme.textPrimary.opacity(0.9))
+                                    .lineSpacing(4)
+                                    .textSelection(.enabled)
+
+                                if let citation, let jump = onJumpToTimestamp {
+                                    Button {
+                                        jump(citation.timestamp)
+                                    } label: {
+                                        HStack(spacing: 2.5) {
+                                            Image(systemName: "play.fill")
+                                                .font(.system(size: 7))
+                                            Text(citation.formattedTimestamp)
+                                                .font(.system(size: 10, weight: .medium, design: .monospaced))
+                                        }
+                                        .foregroundStyle(AppTheme.brandPrimary)
+                                        .padding(.horizontal, 5.5)
+                                        .padding(.vertical, 1.5)
+                                        .background(Capsule().fill(AppTheme.brandSoftFill.opacity(0.85)))
+                                    }
+                                    .buttonStyle(.plain)
+                                    .help(L("跳转到 \(citation.formattedTimestamp) 听原声", "Jump to \(citation.formattedTimestamp)"))
+                                }
+                            }
+                        }
+                    }
+                }
+                .padding(.leading, 26)
+            }
+        }
+    }
+
+    private func mindMapActionBranch(key: String, items: [ActionItem], interactive: Bool) -> some View {
+        let isCollapsed = interactive && collapsedBranches.contains(key)
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Rectangle()
+                    .fill(AppTheme.mindMapLine)
+                    .frame(width: 12, height: 1.5)
+
+                Button {
+                    guard interactive else { return }
+                    withAnimation(.easeInOut(duration: 0.16)) {
+                        if collapsedBranches.contains(key) {
+                            collapsedBranches.remove(key)
+                        } else {
+                            collapsedBranches.insert(key)
+                        }
+                    }
+                } label: {
+                    HStack(spacing: 6) {
+                        if interactive {
+                            Image(systemName: isCollapsed ? "chevron.right" : "chevron.down")
+                                .font(.system(size: 9, weight: .semibold))
+                                .foregroundStyle(AppTheme.brandPrimary.opacity(0.75))
+                                .frame(width: 10)
+                        }
+                        Text(L("待办事项", "Action Items"))
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(AppTheme.textPrimary)
+                        if isCollapsed {
+                            Text("\(items.count)")
+                                .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                                .foregroundStyle(AppTheme.brandPrimary)
+                                .padding(.horizontal, 5.5)
+                                .padding(.vertical, 1)
+                                .background(Capsule().fill(AppTheme.brandSoftFill))
+                        }
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 7)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .fill(AppTheme.mindMapNodeFill)
+                    )
+                    .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                }
+                .buttonStyle(.plain)
+            }
+
+            if !isCollapsed {
+                VStack(alignment: .leading, spacing: 7) {
+                    ForEach(items) { item in
+                        HStack(alignment: .top, spacing: 8) {
+                            Button {
+                                appState.toggleActionItem(meetingID: meeting.id, actionID: item.id)
+                            } label: {
+                                Image(systemName: item.isCompleted ? "checkmark.square.fill" : "square")
+                                    .font(.system(size: 13.5))
+                                    .foregroundStyle(item.isCompleted ? AppTheme.brandPrimary : AppTheme.textMuted)
+                            }
+                            .buttonStyle(.plain)
+                            .padding(.top, 1)
+
+                            inlineMarkdownText(actionItemDisplayText(item))
                                 .font(.system(size: 13))
-                                .foregroundStyle(AppTheme.textPrimary.opacity(0.9))
-                                .lineSpacing(4)
+                                .strikethrough(item.isCompleted, color: AppTheme.textMuted)
+                                .foregroundStyle(item.isCompleted ? AppTheme.textSecondary : AppTheme.textPrimary)
+                                .lineSpacing(3)
                                 .textSelection(.enabled)
                         }
                     }
@@ -292,52 +560,74 @@ struct DoubaoMindMapView: View {
         }
     }
 
-    private func mindMapActionBranch(items: [ActionItem]) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
-                Rectangle()
-                    .fill(AppTheme.mindMapLine)
-                    .frame(width: 12, height: 1.5)
-                Text(L("待办事项", "Action Items"))
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(AppTheme.textPrimary)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 7)
-                    .background(
-                        RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .fill(AppTheme.mindMapNodeFill)
-                    )
-            }
+    private func rebuildCitationCache() {
+        guard onJumpToTimestamp != nil else {
+            citationCache = [:]
+            return
+        }
+        let segments = meeting.segments
+        var candidates: [String] = []
+        for topic in meeting.minutes.topics { candidates.append(contentsOf: topic.points) }
+        candidates.append(contentsOf: meeting.minutes.decisions)
+        candidates.append(contentsOf: meeting.minutes.openQuestions)
 
-            VStack(alignment: .leading, spacing: 7) {
-                ForEach(items) { item in
-                    HStack(alignment: .top, spacing: 8) {
-                        Button {
-                            appState.toggleActionItem(meetingID: meeting.id, actionID: item.id)
-                        } label: {
-                            Image(systemName: item.isCompleted ? "checkmark.square.fill" : "square")
-                                .font(.system(size: 13.5))
-                                .foregroundStyle(item.isCompleted ? AppTheme.brandPrimary : AppTheme.textMuted)
-                        }
-                        .buttonStyle(.plain)
-                        .padding(.top, 1)
-
-                        inlineMarkdownText(actionItemDisplayText(item))
-                            .font(.system(size: 13))
-                            .strikethrough(item.isCompleted, color: AppTheme.textMuted)
-                            .foregroundStyle(item.isCompleted ? AppTheme.textSecondary : AppTheme.textPrimary)
-                            .lineSpacing(3)
-                            .textSelection(.enabled)
-                    }
-                }
+        var map: [String: MinutesTimestampMatcher.Match] = [:]
+        for text in candidates where map[text] == nil {
+            if let match = MinutesTimestampMatcher.resolve(for: text, segments: segments) {
+                map[text] = match
             }
-            .padding(.leading, 26)
+        }
+        citationCache = map
+    }
+
+    private func exportMindMapPNG() {
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.png]
+        let safeTitle = meeting.title.replacingOccurrences(of: "/", with: "-")
+        panel.nameFieldStringValue = "\(safeTitle)-MindMap.png"
+        panel.title = L("导出思维导图图片 (PNG)", "Export Mind-Map Image (PNG)")
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+
+        let exportView = VStack(alignment: .leading, spacing: 12) {
+            mindMapCanvas(interactive: false)
+            HStack {
+                Spacer()
+                Text("Sonote 声记")
+                    .font(.system(size: 10.5, weight: .medium))
+                    .foregroundStyle(AppTheme.textMuted)
+            }
+            .padding(.top, 6)
+        }
+        .padding(28)
+        .frame(width: 720, alignment: .leading)
+        .background(AppTheme.canvasWhite)
+        .environment(\.colorScheme, theme.preferredColorScheme ?? .light)
+
+        let renderer = ImageRenderer(content: exportView)
+        renderer.scale = 2.0
+        guard let nsImage = renderer.nsImage,
+              let tiff = nsImage.tiffRepresentation,
+              let rep = NSBitmapImageRep(data: tiff),
+              let pngData = rep.representation(using: .png, properties: [:]) else {
+            onToast?(L("导图图片渲染失败", "PNG Render Failed"))
+            return
+        }
+
+        do {
+            try pngData.write(to: url, options: .atomic)
+            onToast?(L("已导出 PNG 图片", "Exported PNG"))
+        } catch {
+            let alert = NSAlert()
+            alert.alertStyle = .warning
+            alert.messageText = L("导图图片保存失败", "Failed to Save PNG")
+            alert.informativeText = error.localizedDescription
+            alert.runModal()
         }
     }
 
     private func actionItemDisplayText(_ item: ActionItem) -> String {
         var suffix: [String] = []
-        if !item.owner.isEmpty && item.owner != "待定" { suffix.append(item.owner) }
+        if !item.owner.isEmpty && item.owner != "待定" && item.owner != "TBD" { suffix.append(item.owner) }
         if !item.dueDate.isEmpty { suffix.append(item.dueDate) }
         return suffix.isEmpty ? item.task : "\(item.task)（\(suffix.joined(separator: " · "))）"
     }

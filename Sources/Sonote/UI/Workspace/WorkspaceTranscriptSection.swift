@@ -40,6 +40,7 @@ extension CompletedMeetingDocumentView {
                         TextField(L("搜索逐字稿关键词...", "Search transcript..."), text: $transcriptSearchQuery)
                             .textFieldStyle(.plain)
                             .font(.system(size: 12))
+                            .focused($isTranscriptSearchFocused)
                             .frame(width: 168)
                         if !transcriptSearchQuery.isEmpty {
                             Text("\(filteredTranscriptSegments.count)")
@@ -89,6 +90,45 @@ extension CompletedMeetingDocumentView {
                     }
 
                     if hasAudioFile {
+                        Button {
+                            showRetranscribeDialog = true
+                        } label: {
+                            HStack(spacing: 4) {
+                                if appState.isRetranscribing {
+                                    ProgressView().controlSize(.mini)
+                                } else {
+                                    Image(systemName: "arrow.triangle.2.circlepath")
+                                        .font(.system(size: 10.5))
+                                }
+                                Text(appState.isRetranscribing ? L("重转中...", "Re-transcribing...") : L("重新转写", "Re-transcribe"))
+                                    .font(.system(size: 11.5, weight: .medium))
+                            }
+                            .foregroundStyle(AppTheme.textSecondary)
+                            .padding(.horizontal, 9)
+                            .padding(.vertical, 5)
+                            .background(Capsule().fill(AppTheme.softCardBg))
+                            .overlay(Capsule().strokeBorder(AppTheme.subtleBorder, lineWidth: 1))
+                            .contentShape(Capsule())
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(appState.isRetranscribing || appState.isDiarizing)
+                        .help(L("使用当前最新的语音引擎、降噪与热词词典重新转写本场录音", "Re-transcribe saved audio with current ASR model, denoiser & glossary"))
+                        .confirmationDialog(
+                            L("使用当前语音配置重新转写本场录音？", "Re-transcribe Saved Audio?"),
+                            isPresented: $showRetranscribeDialog,
+                            titleVisibility: .visible
+                        ) {
+                            Button(L("仅重转逐字稿（保留现有纪要）", "Re-transcribe Transcript Only")) {
+                                Task { await appState.retranscribeMeeting(id: meeting.id, regenerateMinutes: false) }
+                            }
+                            Button(L("重转逐字稿并重新生成 AI 纪要", "Re-transcribe & Regenerate Minutes")) {
+                                Task { await appState.retranscribeMeeting(id: meeting.id, regenerateMinutes: true) }
+                            }
+                            Button(L("取消", "Cancel"), role: .cancel) {}
+                        } message: {
+                            Text(L("将基于已保存的本地录音重新识别逐字稿；你的「会中随手记」、标签与置顶状态会完整保留。", "Re-runs ASR on your saved audio file. Quick Notes, tags, and pinned state are preserved."))
+                        }
+
                         Button {
                             Task { await appState.runSpeakerDiarization(for: meeting.id) }
                         } label: {

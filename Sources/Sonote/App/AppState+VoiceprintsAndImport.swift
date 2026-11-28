@@ -6,30 +6,148 @@ import SonoteCore
 extension AppState {
 
     public func importMediaFile(url: URL) async {
-        guard importProgress == nil else { return }
-        let fileName = url.deletingPathExtension().lastPathComponent
-        importProgress = AudioFileImportProgress(fraction: 0.02, message: L("准备导入「\(fileName)」...", "Preparing \"\(fileName)\"..."))
+        await importMediaFiles(urls: [url])
+    }
 
-        let sessionID = UUID()
-        let baseBackupURL = store.audioBackupURL(for: sessionID)
-        var savedMediaURL: URL?
+    /// Queues one or more local audio/video files for sequential offline transcription, with cancel support.
+    public func importMediaFiles(urls: [URL]) async {
+        let validURLs = urls.filter { FileManager.default.fileExists(atPath: $0.path) }
+        guard !validURLs.isEmpty, importProgress == nil else { return }
+
+        let task = Task { @MainActor [weak self] in
+            guard let self else { return }
+            let total = validURLs.count
+            var importedCount = 0
+
+            for (index, url) in validURLs.enumerated() {
+                if Task.isCancelled { break }
+                let prefix = total > 1 ? "(\(index + 1)/\(total)) " : ""
+                let fileName = url.deletingPathExtension().lastPathComponent
+                self.importProgress = AudioFileImportProgress(
+                    fraction: 0.02,
+                    message: "\(prefix)\(L("准备导入「\(fileName)」...", "Preparing \"\(fileName)\"..."))"
+                )
+
+                let sessionID = UUID()
+                let baseBackupURL = self.store.audioBackupURL(for: sessionID)
+                var savedMediaURL: URL?
+
+                do {
+                    self.importProgress = AudioFileImportProgress(
+                        fraction: 0.04,
+                        message: "\(prefix)\(L("正在提取音频轨道...", "Extracting audio track..."))"
+                    )
+                    let preparedURL = try await AudioFileImporter.preparePlayableAudioBackup(
+                        from: url,
+                        destinationBaseURL: baseBackupURL
+                    )
+                    savedMediaURL = preparedURL
+                    try Task.checkCancellation()
+
+                    let (segments, duration) = try await AudioFileImporter.transcribeMediaFile(
+                        url: preparedURL,
+                        settings: self.settings,
+                        extraHotwords: self.combinedVoiceprintHotwords,
+                        voiceprintProfiles: self.voiceprints,
+                        onProgress: { [weak self] prog in
+                            Task { @MainActor [weak self] in
+                                guard let self, self.importProgress != nil else { return }
+                                self.importProgress = AudioFileImportProgress(
+                                    fraction: prog.fraction,
+                                    message: "\(prefix)\(prog.message)"
+                                )
+                            }
+                        },
+                        onMLXState: { [weak self] state in
+                            Task { @MainActor [weak self] in
+                                self?.mlxModelState = state
+                            }
+                        }
+                    )
+                    try Task.checkCancellation()
+
+                    let session = MeetingSession(
+                        id: sessionID,
+                        title: fileName.isEmpty ? L("导入录音", "Imported Media") : fileName,
+                        sourceAppName: L("文件导入", "File Import"),
+                        startedAt: Date(),
+                        endedAt: Date(),
+                        duration: duration,
+                        status: segments.isEmpty ? .completed : .summarizing,
+                        segments: segments,
+                        audioFilePath: preparedURL.path,
+                        template: self.settings.defaultMinutesTemplate
+                    )
+
+                    self.meetings.insert(session, at: 0)
+                    self.selectedMeetingID = session.id
+                    self.store.saveMeetingAsync(session)
+                    self.refreshAudioStorageStats()
+                    importedCount += 1
+
+                    if !segments.isEmpty {
+                        await self.refreshMinutesNow(for: session.id, isFinal: true)
+                        self.updateMeeting(id: session.id) { $0.status = .completed }
+                    }
+                } catch is CancellationError {
+                    if let savedMediaURL {
+                        try? FileManager.default.removeItem(at: savedMediaURL)
+                    }
+                    break
+                } catch {
+                    if let savedMediaURL {
+                        try? FileManager.default.removeItem(at: savedMediaURL)
+                    }
+                    self.statusBannerMessage = L("导入「\(fileName)」失败：\(error.localizedDescription)", "Import \"\(fileName)\" failed: \(error.localizedDescription)")
+                }
+            }
+
+            self.importProgress = nil
+            self.activeImportTask = nil
+            if total > 1 && importedCount > 0 {
+                self.statusBannerMessage = L("已完成批量导入（成功 \(importedCount)/\(total) 个文件）", "Batch import finished (\(importedCount)/\(total) files)")
+            }
+        }
+
+        activeImportTask = task
+        await task.value
+    }
+
+    public func cancelMediaImport() {
+        activeImportTask?.cancel()
+        activeImportTask = nil
+        importProgress = nil
+        statusBannerMessage = L("已取消音视频导入", "Media import cancelled")
+    }
+
+    /// Re-runs offline transcription on a meeting's saved audio file using the latest ASR model,
+    /// denoiser, glossary terms & voiceprints, preserving manual notes, tags & pinned state.
+    public func retranscribeMeeting(id: UUID, regenerateMinutes: Bool) async {
+        guard !isRetranscribing,
+              let meeting = meetings.first(where: { $0.id == id }),
+              let audioPath = meeting.audioFilePath,
+              FileManager.default.fileExists(atPath: audioPath) else {
+            return
+        }
+
+        isRetranscribing = true
+        let audioURL = URL(fileURLWithPath: audioPath)
+        let attendeeHint = meeting.calendarAttendees.joined(separator: ", ")
+        let extraHotwords = [combinedVoiceprintHotwords, attendeeHint]
+            .filter { !$0.isEmpty }
+            .joined(separator: ", ")
+
+        statusBannerMessage = L("正在使用当前语音引擎重新转写音频...", "Re-transcribing audio with active ASR engine...")
 
         do {
-            importProgress = AudioFileImportProgress(fraction: 0.04, message: L("正在提取音频轨道...", "Extracting audio track..."))
-            let preparedURL = try await AudioFileImporter.preparePlayableAudioBackup(
-                from: url,
-                destinationBaseURL: baseBackupURL
-            )
-            savedMediaURL = preparedURL
-
-            let (segments, duration) = try await AudioFileImporter.transcribeMediaFile(
-                url: preparedURL,
+            let (newSegments, decodedDuration) = try await AudioFileImporter.transcribeMediaFile(
+                url: audioURL,
                 settings: settings,
-                extraHotwords: combinedVoiceprintHotwords,
+                extraHotwords: extraHotwords,
                 voiceprintProfiles: voiceprints,
                 onProgress: { [weak self] prog in
                     Task { @MainActor [weak self] in
-                        self?.importProgress = prog
+                        self?.statusBannerMessage = "\(prog.message) (\(Int(prog.fraction * 100))%)"
                     }
                 },
                 onMLXState: { [weak self] state in
@@ -39,36 +157,24 @@ extension AppState {
                 }
             )
 
-            let session = MeetingSession(
-                id: sessionID,
-                title: fileName.isEmpty ? L("导入录音", "Imported Media") : fileName,
-                sourceAppName: L("文件导入", "File Import"),
-                startedAt: Date(),
-                endedAt: Date(),
-                duration: duration,
-                status: segments.isEmpty ? .completed : .summarizing,
-                segments: segments,
-                audioFilePath: preparedURL.path,
-                template: settings.defaultMinutesTemplate
-            )
+            updateMeeting(id: id) { m in
+                m.segments = newSegments
+                if decodedDuration > 0 {
+                    m.duration = decodedDuration
+                }
+            }
 
-            meetings.insert(session, at: 0)
-            selectedMeetingID = session.id
-            store.saveMeeting(session)
-            refreshAudioStorageStats()
-            importProgress = nil
-
-            if !segments.isEmpty {
-                await refreshMinutesNow(for: session.id, isFinal: true)
-                updateMeeting(id: session.id) { $0.status = .completed }
+            if regenerateMinutes && !newSegments.isEmpty {
+                statusBannerMessage = L("重新转写完成（\(newSegments.count) 段），正在重新生成纪要...", "Re-transcribed \(newSegments.count) segments; regenerating minutes...")
+                await refreshMinutesNow(for: id, isFinal: true)
+            } else {
+                statusBannerMessage = L("已完成重新转写（共 \(newSegments.count) 段逐字稿）", "Re-transcribed \(newSegments.count) segments")
             }
         } catch {
-            if let savedMediaURL {
-                try? FileManager.default.removeItem(at: savedMediaURL)
-            }
-            importProgress = nil
-            statusBannerMessage = L("导入音视频失败：\(error.localizedDescription)", "Media import failed: \(error.localizedDescription)")
+            statusBannerMessage = L("重新转写失败：\(error.localizedDescription)", "Re-transcription failed: \(error.localizedDescription)")
         }
+
+        isRetranscribing = false
     }
 
     public var combinedVoiceprintHotwords: String {

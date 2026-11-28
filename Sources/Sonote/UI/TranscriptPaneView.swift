@@ -198,6 +198,25 @@ struct TranscriptPaneView: View {
                             .help(L("记录会议重点，AI 提炼纪要时将高优先级参考", "Jot notes — AI prioritizes them in your minutes"))
 
                             Button {
+                                appState.highlightCurrentLiveMoment()
+                            } label: {
+                                HStack(spacing: 4) {
+                                    Image(systemName: appState.pendingLiveStarHighlight ? "star.fill" : "star")
+                                        .font(.system(size: 11))
+                                    Text(L("标星", "Highlight"))
+                                        .font(.system(size: 11.5))
+                                }
+                                .foregroundStyle(appState.pendingLiveStarHighlight ? AppTheme.warningAmber : AppTheme.textMuted)
+                                .padding(.horizontal, 9)
+                                .padding(.vertical, 4)
+                                .background(Capsule().fill(appState.pendingLiveStarHighlight ? AppTheme.warningAmber.opacity(0.14) : AppTheme.elevatedSurface.opacity(0.8)))
+                                .overlay(Capsule().strokeBorder(appState.pendingLiveStarHighlight ? AppTheme.warningAmber.opacity(0.4) : AppTheme.subtleBorder, lineWidth: 1))
+                                .contentShape(Capsule())
+                            }
+                            .buttonStyle(.plain)
+                            .help(L("一键标星当前关键发言（AI 总结时高优先级参考）", "Highlight current moment (prioritized in AI minutes)"))
+
+                            Button {
                                 appState.toggleSubtitleBar()
                             } label: {
                                 HStack(spacing: 4) {
@@ -215,7 +234,16 @@ struct TranscriptPaneView: View {
                             }
                             .buttonStyle(.plain)
                             .help(L("开启/隐藏屏幕底部置顶双语字幕条", "Toggle floating live caption bar"))
+
                             Spacer()
+
+                            if let flash = appState.lastLiveHighlightFlash {
+                                Text(flash)
+                                    .font(.system(size: 11, weight: .medium))
+                                    .foregroundStyle(AppTheme.warningAmber)
+                                    .lineLimit(1)
+                                    .transition(.opacity)
+                            }
                         }
                     }
                 }

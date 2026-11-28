@@ -17,6 +17,8 @@ extension AppState {
         lastSummarizedCharCount = 0
         lastSummarizedSegmentCount = 0
         lastSummarizedManualNotes = ""
+        pendingLiveStarHighlight = false
+        lastLiveHighlightFlash = nil
         activeSubtitleTranslationTask?.cancel()
         activeSubtitleTranslationTask = nil
 
@@ -91,9 +93,15 @@ extension AppState {
         transcriptionCoordinator.onCommittedSegment = { [weak self] segment in
             Task { @MainActor [weak self] in
                 guard let self, let activeID = self.activeRecordingMeetingID else { return }
-                self.appendTranscriptSegment(segment, to: activeID)
+                var incoming = segment
+                if self.pendingLiveStarHighlight {
+                    incoming.isStarred = true
+                    self.pendingLiveStarHighlight = false
+                    self.flashLiveHighlight(L("已标星 \(incoming.formattedTimestamp)", "Starred \(incoming.formattedTimestamp)"))
+                }
+                self.appendTranscriptSegment(incoming, to: activeID)
                 if self.isSubtitleBarVisible && self.settings.enableLiveSubtitleTranslation {
-                    self.translateLatestSubtitle(segment.text)
+                    self.translateLatestSubtitle(incoming.text)
                 }
             }
         }
@@ -150,6 +158,8 @@ extension AppState {
         stopTimers()
         activeSubtitleTranslationTask?.cancel()
         activeSubtitleTranslationTask = nil
+        pendingLiveStarHighlight = false
+        lastLiveHighlightFlash = nil
         pendingEndedMeeting = nil
         onHidePromptPanel?()
         setCapsuleVisible(false)
@@ -219,6 +229,55 @@ extension AppState {
 
     public func toggleSubtitleBar() {
         setSubtitleBarVisible(!isSubtitleBarVisible)
+    }
+
+    /// Smart one-click live highlight during recording:
+    /// 1) Stars the most recently committed segment if it finished within ~6.5s (and no new volatile speech is ahead),
+    /// 2) Arms auto-star on the next committed segment if someone is speaking mid-sentence,
+    /// 3) Falls back to starring the last unstarred segment or appending a timestamped Quick Note bookmark.
+    public func highlightCurrentLiveMoment() {
+        guard let activeID = activeRecordingMeetingID,
+              let meeting = meetings.first(where: { $0.id == activeID }) else { return }
+
+        let elapsed = recordingClock.elapsed()
+        let tsLabel = MinutesTimestampMatcher.formatTimestamp(elapsed)
+        let hasActiveVolatile = !volatileRemoteText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || !volatileMeText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+
+        if let last = meeting.segments.last, !last.isStarred, (elapsed - last.timestamp) <= 6.5, !hasActiveVolatile {
+            toggleStarSegment(meetingID: activeID, segmentID: last.id)
+            flashLiveHighlight(L("已标星 \(last.formattedTimestamp)", "Starred \(last.formattedTimestamp)"))
+            return
+        }
+
+        if hasActiveVolatile {
+            pendingLiveStarHighlight = true
+            flashLiveHighlight(L("本句落盘后自动标星 ⭐", "Will star next line ⭐"))
+            return
+        }
+
+        if let last = meeting.segments.last, !last.isStarred {
+            toggleStarSegment(meetingID: activeID, segmentID: last.id)
+            flashLiveHighlight(L("已标星 \(last.formattedTimestamp)", "Starred \(last.formattedTimestamp)"))
+            return
+        }
+
+        // No unstarred segments yet — drop a timestamped bookmark in Quick Notes so the moment is never lost
+        let bookmark = "[\(tsLabel)] ⭐ \(L("重点标记", "Highlighted moment"))"
+        updateMeeting(id: activeID) { m in
+            let existing = m.manualNotes.trimmingCharacters(in: .whitespacesAndNewlines)
+            m.manualNotes = existing.isEmpty ? bookmark : "\(existing)\n\(bookmark)"
+        }
+        flashLiveHighlight(L("已记录重点书签 \(tsLabel)", "Bookmarked \(tsLabel)"))
+    }
+
+    private func flashLiveHighlight(_ text: String) {
+        lastLiveHighlightFlash = text
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.2) { [weak self] in
+            if self?.lastLiveHighlightFlash == text {
+                self?.lastLiveHighlightFlash = nil
+            }
+        }
     }
 
     public func dismissInterruptedMeetingRecovery() {

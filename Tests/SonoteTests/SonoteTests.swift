@@ -1540,6 +1540,7 @@ final class SonoteTests: XCTestCase {
         let legacySettingsJSON = #"{"authMode":"localMLX"}"#
         let decodedSettings = try JSONDecoder().decode(AppSettings.self, from: Data(legacySettingsJSON.utf8))
         XCTAssertEqual(decodedSettings.customAskAIPrompts, [])
+        XCTAssertEqual(decodedSettings.liveSubtitleFontSize, 14.0, accuracy: 0.01)
     }
 
     func testRecordingClockPauseResumeAndAsyncStoreIndexPersistence() throws {

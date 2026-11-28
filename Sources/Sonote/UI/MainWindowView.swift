@@ -24,6 +24,7 @@ struct MainWindowView: View {
     @State private var showBatchTagPopover: Bool = false
     @State private var batchTagDraft: String = ""
     @State private var showBatchDeleteConfirm: Bool = false
+    @FocusState private var isHomeSearchFocused: Bool
 
     var body: some View {
         Group {
@@ -313,6 +314,7 @@ struct MainWindowView: View {
                                             TextField(L("搜索标题、逐字稿或待办...", "Search title, transcript, or todos..."), text: $searchText)
                                                 .textFieldStyle(.plain)
                                                 .font(.system(size: 12))
+                                                .focused($isHomeSearchFocused)
                                                 .frame(width: 175)
                                             if !searchText.isEmpty {
                                                 Button {
@@ -433,6 +435,14 @@ struct MainWindowView: View {
         .onDrop(of: [UTType.fileURL], isTargeted: $isDropTargeted) { providers in
             handleDroppedMediaProviders(providers)
         }
+        .background {
+            Button("") {
+                isHomeSearchFocused = true
+            }
+            .keyboardShortcut("f", modifiers: .command)
+            .opacity(0)
+            .frame(width: 0, height: 0)
+        }
     }
 
     private func importProgressBanner(_ progress: AudioFileImportProgress) -> some View {
@@ -442,10 +452,23 @@ struct MainWindowView: View {
                 Text(progress.message)
                     .font(.system(size: 12.5, weight: .medium))
                     .foregroundStyle(AppTheme.textPrimary)
+                    .lineLimit(1)
                 Spacer()
                 Text("\(Int(progress.fraction * 100))%")
                     .font(.system(size: 12, design: .monospaced))
                     .foregroundStyle(AppTheme.brandPrimary)
+                Button {
+                    appState.cancelMediaImport()
+                } label: {
+                    Text(L("取消", "Cancel"))
+                        .font(.system(size: 11.5, weight: .medium))
+                        .foregroundStyle(AppTheme.recordingRed)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(Capsule().fill(AppTheme.recordingRed.opacity(0.10)))
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
             }
             ProgressView(value: progress.fraction)
                 .tint(AppTheme.brandPrimary)
@@ -457,33 +480,47 @@ struct MainWindowView: View {
 
     private func pickAndImportMediaFile() {
         let panel = NSOpenPanel()
-        panel.title = L("选择本地音频或视频文件（离线 Qwen3-ASR 转写）", "Select Local Audio or Video File (Offline Qwen3-ASR)")
-        panel.allowsMultipleSelection = false
+        panel.title = L("选择本地音频或视频文件（支持多选批量离线转写）", "Select Local Audio or Video Files (Batch Offline Qwen3-ASR)")
+        panel.allowsMultipleSelection = true
         panel.canChooseDirectories = false
         panel.allowedContentTypes = [.audio, .mpeg4Audio, .mp3, .wav, .mpeg4Movie, .quickTimeMovie, .movie]
-        if panel.runModal() == .OK, let url = panel.url {
-            Task { await appState.importMediaFile(url: url) }
+        if panel.runModal() == .OK, !panel.urls.isEmpty {
+            let urls = panel.urls
+            Task { await appState.importMediaFiles(urls: urls) }
         }
     }
 
     private func handleDroppedMediaProviders(_ providers: [NSItemProvider]) -> Bool {
-        guard let provider = providers.first(where: { $0.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) }) else {
-            return false
-        }
-        provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { item, _ in
-            let url: URL?
-            if let data = item as? Data {
-                url = URL(dataRepresentation: data, relativeTo: nil)
-            } else if let direct = item as? URL {
-                url = direct
-            } else {
-                url = nil
+        let fileProviders = providers.filter { $0.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) }
+        guard !fileProviders.isEmpty else { return false }
+
+        let supportedExts = Set(["m4a", "mp3", "wav", "aac", "flac", "mp4", "mov", "mkv", "webm", "ogg", "aiff"])
+        let group = DispatchGroup()
+        let lock = NSLock()
+        var collected: [URL] = []
+
+        for provider in fileProviders {
+            group.enter()
+            provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { item, _ in
+                defer { group.leave() }
+                let url: URL?
+                if let data = item as? Data {
+                    url = URL(dataRepresentation: data, relativeTo: nil)
+                } else if let direct = item as? URL {
+                    url = direct
+                } else {
+                    url = nil
+                }
+                if let fileURL = url, supportedExts.contains(fileURL.pathExtension.lowercased()) {
+                    lock.withLock { collected.append(fileURL) }
+                }
             }
-            guard let fileURL = url else { return }
-            let supportedExts = Set(["m4a", "mp3", "wav", "aac", "flac", "mp4", "mov", "mkv", "webm", "ogg", "aiff"])
-            guard supportedExts.contains(fileURL.pathExtension.lowercased()) else { return }
+        }
+
+        group.notify(queue: .main) {
+            guard !collected.isEmpty else { return }
             Task { @MainActor in
-                await appState.importMediaFile(url: fileURL)
+                await appState.importMediaFiles(urls: collected)
             }
         }
         return true
