@@ -232,6 +232,36 @@ extension AppState {
         }
     }
 
+    public func exportOriginalAudioWithSavePanel(for meeting: MeetingSession) {
+        guard let audioPath = meeting.audioFilePath,
+              FileManager.default.fileExists(atPath: audioPath) else { return }
+        let sourceURL = URL(fileURLWithPath: audioPath)
+        let ext = sourceURL.pathExtension.isEmpty ? "m4a" : sourceURL.pathExtension
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.audio, .mpeg4Audio]
+        let safeName = meeting.title.replacingOccurrences(of: "/", with: "-")
+        panel.nameFieldStringValue = "\(safeName).\(ext)"
+        panel.title = L("导出会议原声音频", "Export Original Audio")
+        if panel.runModal() == .OK, let destURL = panel.url {
+            do {
+                let fm = FileManager.default
+                if fm.fileExists(atPath: destURL.path) {
+                    try fm.removeItem(at: destURL)
+                }
+                try fm.copyItem(at: sourceURL, to: destURL)
+                statusBannerMessage = L("已导出音频至 \(destURL.lastPathComponent)", "Exported audio to \(destURL.lastPathComponent)")
+            } catch {
+                reportExportError(format: ext.uppercased(), error: error)
+            }
+        }
+    }
+
+    public func revealAudioInFinder(for meeting: MeetingSession) {
+        guard let audioPath = meeting.audioFilePath,
+              FileManager.default.fileExists(atPath: audioPath) else { return }
+        NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: audioPath)])
+    }
+
     private func reportExportError(format: String, error: Error) {
         let msg = L("导出 \(format) 失败：\(error.localizedDescription)", "\(format) export failed: \(error.localizedDescription)")
         statusBannerMessage = msg

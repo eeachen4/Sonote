@@ -284,6 +284,15 @@ extension CompletedMeetingDocumentView {
                             appState.exportVTTWithSavePanel(for: meeting)
                         }
                     }
+                    if hasAudioFile {
+                        Divider()
+                        Button(L("导出原声音频文件...", "Export Original Audio...")) {
+                            appState.exportOriginalAudioWithSavePanel(for: meeting)
+                        }
+                        Button(L("在 Finder 中显示音频", "Reveal Audio in Finder")) {
+                            appState.revealAudioInFinder(for: meeting)
+                        }
+                    }
                 } label: {
                     HStack(spacing: 4) {
                         Text(copiedToast ?? L("导出 / 复制", "Export"))
