@@ -2,6 +2,33 @@
 
 All notable changes to **Sonote（声记）** are documented in this file.
 
+## [1.9.0] - 2026-11-28
+
+### Added
+- **Today's Upcoming Schedule on Home & Menu Bar**: Displays upcoming macOS Calendar meetings directly on Home (with live `"Now"` indicator, attendee chips, and one-click `"Record Now"`) and in the Menu Bar popover, pre-filling meeting titles and attendee ASR hotwords automatically.
+- **Transcript Bulk Find & Replace + Adjacent Segment Merge**: Added an inline Find & Replace bar across the full transcript (with automatic self-learning ASR glossary suggestions for replaced terms) plus one-click merging of consecutive short segments (<12s gap) from the same speaker.
+- **Interactive Speaker Talk-Share Analytics Bar**: Added a proportional color-coded speaker talk-share bar (`MeetingSession.speakerShareStats`) above the transcript showing each speaker's speaking percentage; clicking any speaker segment or legend pill filters the transcript instantly.
+- **Cross-Meeting Ask AI Date-Range Quick Selectors & Archive to Minutes**: Added one-click `This Week`, `Last 7d`, and `Last 30d` meeting selection pills in Cross-Meeting Q&A, plus **Save as Minutes** to archive cross-meeting weekly reports or blocker digests as standalone completed meetings.
+- **Original Audio Export & Reveal in Finder**: Added **Export Original Audio...** and **Reveal Audio in Finder** directly in the workspace Export menu whenever a recording audio file exists.
+- **Live 20s Silence / Muted-Mic Warning Banner**: Monitors combined mic & system audio levels during active recordings and surfaces a dismissible warning banner after 20 consecutive seconds of silence to prevent accidental muted recordings.
+- **Re-transcribe Audio, Queued Multi-File Import with Cancel, Smart Live Highlight & Interactive Mind-Map PNG Export**:
+  - Re-transcribe saved meeting audio with your latest ASR model/denoiser/glossary (with optional minutes regeneration).
+  - Queue multiple audio/video files on drop or picker with a live cancel button.
+  - One-click `⭐ Highlight` (`标星`) during live recording (from workspace or floating capsule) prioritized in AI summarization prompts.
+  - Collapsible mind-map branches with `Expand/Collapse All`, clickable `▶ MM:SS` citations, `Copy Mermaid`, and crisp **2× Retina PNG export**.
+  - Native macOS workspace keyboard shortcuts (`⌘1–4`, `⌘E`, `⌘F`, `⌘[`), Global Todos live search + **Copy Markdown**, and floating subtitle bar position persistence + `A- / A+` font size controls.
+
+### Changed
+- **Architecture, Performance & Thread-Safety Overhaul**:
+  - Isolated 25Hz audio level meters into `AudioMeterState` so high-frequency waveform updates no longer invalidate the entire `AppState` view hierarchy.
+  - Introduced thread-safe pause-aware `RecordingClock` shared with `TranscriptionCoordinator` so pause durations never drift transcript timestamps.
+  - Replaced `AppState.settings` full-Keychain rewrites with field-diff Keychain saves + 250ms debounced async `settings.json` persistence, serial `MeetingStore` `ioQueue` with `flushPendingWrites()` on app termination, and O(1) index-based crash-recovery detection (`MeetingIndexEntry.status`).
+  - Offloaded PCM resampling & copy off real-time audio callbacks in `DualAudioCaptureManager`, added subtitle translation cancellation + generation guards, cached `MinutesTimestampMatcher` lookups & `DateFormatter`s, and added explicit user alerts on export failures.
+
+### Fixed
+- **English Search Placeholder Clipping**: Widened English search inputs on Home (`215pt`) and Global Action Items (`205pt`) so placeholders never clip on the right edge.
+- **Clean Timestamp Citation Stripping**: Added `MinutesTimestampMatcher.strippingExplicitCitations(in:)` so static Mind-Map 2× PNG exports, non-interactive views, and Overview sections cleanly strip or link explicit `[MM:SS]` markers with `.onAppear` cache pre-warming.
+
 ## [1.8.0] - 2026-11-28
 
 ### Added
