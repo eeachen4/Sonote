@@ -289,13 +289,16 @@ struct CrossMeetingAskAISheet: View {
     @ObservedObject var appState: AppState
     @ObservedObject private var theme = ThemeManager.shared
     @Binding var isPresented: Bool
+    var onOpenSavedMeeting: ((UUID) -> Void)? = nil
 
     @State private var selectedIDs: Set<UUID> = []
     @State private var questionDraft: String = ""
+    @State private var lastPromptLabel: String = ""
     @State private var answerText: String = ""
     @State private var lastUsage: TokenUsage? = nil
     @State private var isAsking: Bool = false
     @State private var copiedAnswer: Bool = false
+    @State private var savedMeetingID: UUID? = nil
 
     private var quickQuestions: [(label: String, prompt: String)] {
         [
@@ -349,6 +352,13 @@ struct CrossMeetingAskAISheet: View {
                         .buttonStyle(.plain)
                         .font(.system(size: 11))
                         .foregroundStyle(AppTheme.brandPrimary)
+                    }
+
+                    // Date-range quick-select pills (This Week / Last 7d / Last 30d)
+                    HStack(spacing: 5) {
+                        dateRangePill(L("本周", "This Week")) { selectMeetingsInCurrentWeek() }
+                        dateRangePill(L("近 7 天", "Last 7d")) { selectMeetings(withinDays: 7) }
+                        dateRangePill(L("近 30 天", "Last 30d")) { selectMeetings(withinDays: 30) }
                     }
 
                     // Tag quick-select pills
@@ -417,6 +427,7 @@ struct CrossMeetingAskAISheet: View {
                     HStack(spacing: 6) {
                         ForEach(quickQuestions, id: \.label) { item in
                             Button {
+                                lastPromptLabel = item.label
                                 runQuestion(item.prompt)
                             } label: {
                                 Text(item.label)
@@ -463,11 +474,12 @@ struct CrossMeetingAskAISheet: View {
                     .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(AppTheme.subtleBorder, lineWidth: 1))
 
                     if !answerText.isEmpty && !isAsking {
-                        HStack {
+                        HStack(spacing: 10) {
                             if let usage = lastUsage, !usage.isEmpty {
-                                Text(L("本次消耗 \(usage.formattedCompact) tokens（\(usage.detailedSummary)）", "Used \(usage.formattedCompact) tokens (\(usage.detailedSummary))"))
+                                Text(L("本次消耗 \(usage.formattedCompact) tokens", "Used \(usage.formattedCompact) tokens"))
                                     .font(.system(size: 11))
                                     .foregroundStyle(AppTheme.textMuted)
+                                    .help(usage.detailedSummary)
                             }
                             Spacer()
                             Button {
@@ -476,11 +488,43 @@ struct CrossMeetingAskAISheet: View {
                                 copiedAnswer = true
                                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { copiedAnswer = false }
                             } label: {
-                                Label(copiedAnswer ? L("已复制", "Copied") : L("复制 Markdown", "Copy Markdown"), systemImage: "doc.on.doc")
-                                    .font(.system(size: 11.5))
-                                    .foregroundStyle(AppTheme.brandPrimary)
+                                Label(copiedAnswer ? L("已复制", "Copied") : L("复制 Markdown", "Copy MD"), systemImage: "doc.on.doc")
+                                    .font(.system(size: 11.5, weight: .medium))
+                                    .foregroundStyle(AppTheme.textSecondary)
+                                    .padding(.horizontal, 9)
+                                    .padding(.vertical, 4.5)
+                                    .background(Capsule().fill(AppTheme.softCardBg))
+                                    .overlay(Capsule().strokeBorder(AppTheme.subtleBorder, lineWidth: 1))
                             }
                             .buttonStyle(.plain)
+
+                            if let savedID = savedMeetingID {
+                                Button {
+                                    isPresented = false
+                                    onOpenSavedMeeting?(savedID)
+                                } label: {
+                                    Label(L("打开已存纪要", "Open Saved"), systemImage: "arrow.up.right.square")
+                                        .font(.system(size: 11.5, weight: .semibold))
+                                        .foregroundStyle(.white)
+                                        .padding(.horizontal, 10)
+                                        .padding(.vertical, 4.5)
+                                        .background(Capsule().fill(AppTheme.successGreen))
+                                }
+                                .buttonStyle(.plain)
+                            } else {
+                                Button {
+                                    saveAnswerAsMeeting()
+                                } label: {
+                                    Label(L("存为新纪要", "Save as Minutes"), systemImage: "square.and.arrow.down")
+                                        .font(.system(size: 11.5, weight: .semibold))
+                                        .foregroundStyle(.white)
+                                        .padding(.horizontal, 10)
+                                        .padding(.vertical, 4.5)
+                                        .background(Capsule().fill(AppTheme.brandPrimary))
+                                }
+                                .buttonStyle(.plain)
+                                .help(L("将本次汇总归档为独立会议纪要，支持导出 PDF 与 Obsidian 同步", "Archive this digest as a standalone meeting note"))
+                            }
                         }
                     }
 
@@ -531,11 +575,58 @@ struct CrossMeetingAskAISheet: View {
         }
     }
 
+    private func dateRangePill(_ title: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 10.5, weight: .medium))
+                .foregroundStyle(AppTheme.textSecondary)
+                .padding(.horizontal, 7.5)
+                .padding(.vertical, 3.5)
+                .background(Capsule().fill(AppTheme.softCardBg))
+                .overlay(Capsule().strokeBorder(AppTheme.subtleBorder, lineWidth: 0.8))
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func selectMeetingsInCurrentWeek() {
+        let cal = Calendar.current
+        let now = Date()
+        guard let startOfWeek = cal.dateInterval(of: .weekOfYear, for: now)?.start else { return }
+        selectedIDs = Set(appState.meetings.filter { $0.startedAt >= startOfWeek }.map(\.id))
+    }
+
+    private func selectMeetings(withinDays days: Int) {
+        let cutoff = Date().addingTimeInterval(-Double(days) * 24 * 3600)
+        selectedIDs = Set(appState.meetings.filter { $0.startedAt >= cutoff }.map(\.id))
+    }
+
+    private func saveAnswerAsMeeting() {
+        guard !answerText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        let sourceTitles = appState.meetings
+            .filter { selectedIDs.contains($0.id) }
+            .map(\.title)
+        let df = DateFormatter()
+        df.dateFormat = "MM-dd"
+        let prefix = lastPromptLabel.isEmpty ? L("跨会议汇总", "Cross-Meeting Digest") : lastPromptLabel
+        let title = "\(prefix) · \(df.string(from: Date()))"
+        let saved = appState.saveCrossMeetingReportAsMeeting(
+            title: title,
+            markdownContent: answerText,
+            sourceMeetingTitles: sourceTitles,
+            usage: lastUsage
+        )
+        savedMeetingID = saved.id
+    }
+
     private func runQuestion(_ prompt: String) {
-        guard !selectedIDs.isEmpty, !isAsking else { return }
+        let trimmed = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, !selectedIDs.isEmpty, !isAsking else { return }
+        if lastPromptLabel.isEmpty { lastPromptLabel = String(trimmed.prefix(16)) }
         isAsking = true
         answerText = ""
         lastUsage = nil
+        savedMeetingID = nil
         let ids = Array(selectedIDs)
         Task {
             let result = await appState.askAcrossMeetings(meetingIDs: ids, question: prompt) { delta in

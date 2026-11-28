@@ -63,7 +63,11 @@ struct MainWindowView: View {
             }
         }
         .sheet(isPresented: $showCrossMeetingAISheet) {
-            CrossMeetingAskAISheet(appState: appState, isPresented: $showCrossMeetingAISheet)
+            CrossMeetingAskAISheet(appState: appState, isPresented: $showCrossMeetingAISheet) { meetingID in
+                withAnimation(.easeInOut(duration: 0.16)) {
+                    appState.selectedMeetingID = meetingID
+                }
+            }
         }
     }
 

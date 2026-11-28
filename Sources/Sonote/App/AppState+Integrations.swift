@@ -333,6 +333,55 @@ extension AppState {
         return merged
     }
 
+    /// Archives a Cross-Meeting AI synthesis report as a standalone completed meeting document
+    /// (with full Markdown rendering, export, PDF, Webhook & Obsidian auto-sync support).
+    @discardableResult
+    public func saveCrossMeetingReportAsMeeting(
+        title: String,
+        markdownContent: String,
+        sourceMeetingTitles: [String],
+        usage: TokenUsage? = nil
+    ) -> MeetingSession {
+        let df = DateFormatter()
+        df.dateFormat = "MM-dd"
+        let cleanTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let resolvedTitle = cleanTitle.isEmpty
+            ? L("跨会议汇总 · \(df.string(from: Date()))", "Cross-Meeting Digest · \(df.string(from: Date()))")
+            : cleanTitle
+
+        let sourceNote = sourceMeetingTitles.isEmpty
+            ? ""
+            : L("来源会议（\(sourceMeetingTitles.count) 场）：", "Source meetings (\(sourceMeetingTitles.count)): ")
+              + sourceMeetingTitles.joined(separator: "、")
+
+        let session = MeetingSession(
+            title: resolvedTitle,
+            sourceAppName: L("跨会议汇总", "AI Digest"),
+            startedAt: Date(),
+            endedAt: Date(),
+            duration: 0,
+            status: .completed,
+            manualNotes: sourceNote,
+            minutes: SmartMinutes(
+                suggestedTitle: resolvedTitle,
+                overview: "",
+                lastUpdatedAt: Date(),
+                isFinalized: true,
+                rawMarkdownFallback: markdownContent
+            ),
+            tokenUsage: usage ?? TokenUsage(),
+            tags: [L("汇总", "Digest")]
+        )
+
+        meetings.insert(session, at: 0)
+        store.saveMeetingAsync(session)
+        if settings.autoSyncMarkdownFolder && !settings.obsidianVaultPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            _ = syncMeetingToMarkdownFolder(session)
+        }
+        statusBannerMessage = L("已保存为新纪要「\(resolvedTitle)」", "Saved digest as \"\(resolvedTitle)\"")
+        return session
+    }
+
     // MARK: - Webhook Push, Backup Archive & On-Device MLX Controls
 
     public func pushMeetingToWebhook(_ meeting: MeetingSession) async -> (success: Bool, message: String) {
