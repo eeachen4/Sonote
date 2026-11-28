@@ -236,6 +236,11 @@ struct MainWindowView: View {
                             }
                         }
 
+                        // Today's Upcoming Calendar Schedule (one-click scheduled recording)
+                        if !appState.upcomingCalendarEvents.isEmpty && !appState.isRecordingOrPaused {
+                            upcomingCalendarStrip
+                        }
+
                         // Three Clean Primary Action Cards
                         HStack(spacing: 12) {
                             HomeActionCard(
@@ -432,6 +437,9 @@ struct MainWindowView: View {
                     .padding(16)
             }
         }
+        .onAppear {
+            appState.refreshUpcomingCalendarEvents()
+        }
         .onDrop(of: [UTType.fileURL], isTargeted: $isDropTargeted) { providers in
             handleDroppedMediaProviders(providers)
         }
@@ -442,6 +450,91 @@ struct MainWindowView: View {
             .keyboardShortcut("f", modifiers: .command)
             .opacity(0)
             .frame(width: 0, height: 0)
+        }
+    }
+
+    private var upcomingCalendarStrip: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Image(systemName: "calendar")
+                    .font(.system(size: 11.5, weight: .semibold))
+                    .foregroundStyle(AppTheme.brandPrimary)
+                Text(L("今日待开日程", "Today's Schedule"))
+                    .font(.system(size: 12.5, weight: .semibold))
+                    .foregroundStyle(AppTheme.textSecondary)
+                Spacer()
+                Button {
+                    appState.refreshUpcomingCalendarEvents()
+                } label: {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.system(size: 10.5))
+                        .foregroundStyle(AppTheme.textMuted)
+                }
+                .buttonStyle(.plain)
+                .help(L("刷新今日日程", "Refresh schedule"))
+            }
+
+            VStack(spacing: 6) {
+                ForEach(appState.upcomingCalendarEvents) { event in
+                    HStack(spacing: 10) {
+                        HStack(spacing: 5) {
+                            Circle()
+                                .fill(event.isInProgressNow ? AppTheme.successGreen : AppTheme.brandPrimary.opacity(0.65))
+                                .frame(width: 6, height: 6)
+                            Text(event.formattedTimeRange)
+                                .font(.system(size: 11.5, weight: .medium, design: .monospaced))
+                                .foregroundStyle(AppTheme.textSecondary)
+                        }
+                        .frame(width: 98, alignment: .leading)
+
+                        VStack(alignment: .leading, spacing: 1.5) {
+                            HStack(spacing: 6) {
+                                Text(event.title)
+                                    .font(.system(size: 13, weight: .medium))
+                                    .foregroundStyle(AppTheme.textPrimary)
+                                    .lineLimit(1)
+                                if event.isInProgressNow {
+                                    Text(L("进行中", "Now"))
+                                        .font(.system(size: 9.5, weight: .semibold))
+                                        .foregroundStyle(AppTheme.successGreen)
+                                        .padding(.horizontal, 5.5)
+                                        .padding(.vertical, 1)
+                                        .background(Capsule().fill(AppTheme.successGreen.opacity(0.14)))
+                                }
+                            }
+                            if !event.attendees.isEmpty {
+                                Text(L("参会人：\(event.attendees.prefix(4).joined(separator: "、"))", "Attendees: \(event.attendees.prefix(4).joined(separator: ", "))"))
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(AppTheme.textMuted)
+                                    .lineLimit(1)
+                            }
+                        }
+
+                        Spacer(minLength: 8)
+
+                        Button {
+                            Task { await appState.startNewMeeting(calendarEvent: event) }
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: "mic.fill")
+                                    .font(.system(size: 10))
+                                Text(L("开始记录", "Record"))
+                                    .font(.system(size: 11.5, weight: .medium))
+                            }
+                            .foregroundStyle(AppTheme.brandPrimary)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .background(Capsule().fill(AppTheme.brandSoftFill))
+                            .contentShape(Capsule())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(RoundedRectangle(cornerRadius: 11, style: .continuous).fill(AppTheme.elevatedSurface.opacity(0.9)))
+                    .overlay(RoundedRectangle(cornerRadius: 11, style: .continuous).strokeBorder(AppTheme.subtleBorder, lineWidth: 1))
+                }
+            }
         }
     }
 

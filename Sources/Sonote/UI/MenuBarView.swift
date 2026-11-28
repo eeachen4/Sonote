@@ -125,6 +125,43 @@ struct MenuBarView: View {
                 .buttonStyle(.plain)
             }
 
+            // Next upcoming Calendar meeting quick-record pill (when idle)
+            if !appState.isRecordingOrPaused, let nextEvent = appState.upcomingCalendarEvents.first {
+                Button {
+                    Task {
+                        await appState.startNewMeeting(calendarEvent: nextEvent)
+                        if !appState.settings.showFloatingCapsuleWhileRecording {
+                            openMainWorkspace()
+                        }
+                    }
+                } label: {
+                    HStack(spacing: 7) {
+                        Image(systemName: "calendar")
+                            .font(.system(size: 10.5))
+                            .foregroundStyle(AppTheme.brandPrimary)
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(nextEvent.title)
+                                .font(.system(size: 11.5, weight: .medium))
+                                .foregroundStyle(AppTheme.textPrimary)
+                                .lineLimit(1)
+                            Text(nextEvent.formattedTimeRange)
+                                .font(.system(size: 10, design: .monospaced))
+                                .foregroundStyle(AppTheme.textMuted)
+                        }
+                        Spacer()
+                        Text(L("记录", "Record"))
+                            .font(.system(size: 10.5, weight: .semibold))
+                            .foregroundStyle(AppTheme.brandPrimary)
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 7)
+                    .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(AppTheme.softCardBg))
+                    .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(AppTheme.subtleBorder, lineWidth: 0.8))
+                    .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                }
+                .buttonStyle(.plain)
+            }
+
             // Quiet quick-glance stats strip (open todos & today token usage)
             if appState.openActionItemsCount > 0 || !appState.todayTokenUsage.isEmpty {
                 HStack(spacing: 8) {

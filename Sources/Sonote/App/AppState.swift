@@ -83,6 +83,10 @@ public final class AppState: ObservableObject {
                 preset: newValue.globalHotKeyPreset
             )
         }
+
+        if oldValue.enableCalendarIntegration != newValue.enableCalendarIntegration {
+            refreshUpcomingCalendarEvents()
+        }
     }
 
     private func scheduleDebouncedSettingsSave(_ snapshot: AppSettings) {
@@ -162,6 +166,9 @@ public final class AppState: ObservableObject {
     // Crash recovery banner for an abnormally interrupted prior recording
     @Published public var recoveredInterruptedMeetingID: UUID? = nil
 
+    // Today's upcoming macOS Calendar events for one-click scheduled recording
+    @Published public var upcomingCalendarEvents: [CalendarMeetingContext] = []
+
     // MARK: - Services (internal for domain extensions)
 
     let store = MeetingStore.shared
@@ -231,6 +238,18 @@ public final class AppState: ObservableObject {
         self.selectedMeetingID = nil
 
         setupDetector()
+        refreshUpcomingCalendarEvents()
+    }
+
+    public func refreshUpcomingCalendarEvents() {
+        guard settings.enableCalendarIntegration else {
+            if !upcomingCalendarEvents.isEmpty { upcomingCalendarEvents = [] }
+            return
+        }
+        let events = CalendarContextService.shared.upcomingTodayEvents(limit: 3)
+        if upcomingCalendarEvents != events {
+            upcomingCalendarEvents = events
+        }
     }
 
     /// Hydrates a single meeting's full transcript/chat JSON from disk on demand (O(1) file read).

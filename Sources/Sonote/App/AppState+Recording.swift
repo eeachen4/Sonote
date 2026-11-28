@@ -5,7 +5,10 @@ import SonoteCore
 
 extension AppState {
 
-    public func startNewMeeting(from detectedApp: DetectedMeetingApp? = nil) async {
+    public func startNewMeeting(
+        from detectedApp: DetectedMeetingApp? = nil,
+        calendarEvent: CalendarMeetingContext? = nil
+    ) async {
         if isRecordingOrPaused {
             await stopRecordingAndFinalize(generateFinalSummary: false)
         }
@@ -24,8 +27,8 @@ extension AppState {
 
         let now = Date()
         recordingClock.start(at: now)
-        var calendarContext: CalendarMeetingContext? = nil
-        if settings.enableCalendarIntegration {
+        var calendarContext: CalendarMeetingContext? = calendarEvent
+        if calendarContext == nil && settings.enableCalendarIntegration {
             calendarContext = CalendarContextService.shared.currentMeetingContext(at: now)
         }
 
@@ -36,9 +39,10 @@ extension AppState {
             .filter { !$0.isEmpty }
             .joined(separator: ", ")
 
+        let sourceLabel = detectedApp?.appName ?? (calendarEvent != nil ? L("日程会议", "Calendar") : L("新录音", "New Recording"))
         let session = MeetingSession(
             title: title,
-            sourceAppName: detectedApp?.appName ?? L("新录音", "New Recording"),
+            sourceAppName: sourceLabel,
             sourceBundleId: detectedApp?.bundleIdentifier,
             startedAt: now,
             status: .recording,

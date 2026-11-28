@@ -1,7 +1,8 @@
 import Foundation
 import EventKit
 
-public struct CalendarMeetingContext: Equatable, Sendable {
+public struct CalendarMeetingContext: Identifiable, Equatable, Sendable {
+    public var id: String { "\(title)|\(Int(startDate.timeIntervalSince1970))" }
     public var title: String
     public var attendees: [String]
     public var startDate: Date
@@ -12,6 +13,17 @@ public struct CalendarMeetingContext: Equatable, Sendable {
         self.attendees = attendees
         self.startDate = startDate
         self.endDate = endDate
+    }
+
+    public var isInProgressNow: Bool {
+        let now = Date()
+        return startDate <= now && endDate >= now
+    }
+
+    public var formattedTimeRange: String {
+        let df = DateFormatter()
+        df.dateFormat = "HH:mm"
+        return "\(df.string(from: startDate))–\(df.string(from: endDate))"
     }
 
     public var asrHotwordHint: String {
@@ -90,6 +102,51 @@ public final class CalendarContextService: @unchecked Sendable {
             startDate: event.startDate,
             endDate: event.endDate
         )
+    }
+
+    /// Returns currently active and upcoming non-all-day meetings remaining today (sorted chronologically).
+    public func upcomingTodayEvents(from date: Date = Date(), limit: Int = 3) -> [CalendarMeetingContext] {
+        guard isAuthorized(), limit > 0 else { return [] }
+        let cal = Calendar.current
+        let endOfDay = cal.date(bySettingHour: 23, minute: 59, second: 59, of: date) ?? date.addingTimeInterval(12 * 3600)
+        let windowStart = date.addingTimeInterval(-30 * 60)
+        let predicate = store.predicateForEvents(withStart: windowStart, end: endOfDay, calendars: nil)
+
+        let rawEvents = store.events(matching: predicate)
+            .filter { event in
+                !event.isAllDay
+                    && event.endDate > date
+                    && !(event.title?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
+            }
+            .sorted { $0.startDate < $1.startDate }
+
+        var results: [CalendarMeetingContext] = []
+        var seenIDs: Set<String> = []
+        for event in rawEvents {
+            guard let title = event.title?.trimmingCharacters(in: .whitespacesAndNewlines), !title.isEmpty else { continue }
+            var attendeeNames: [String] = []
+            if let attendees = event.attendees {
+                for person in attendees {
+                    if let name = person.name?.trimmingCharacters(in: .whitespacesAndNewlines),
+                       !name.isEmpty,
+                       !name.contains("@"),
+                       !attendeeNames.contains(name) {
+                        attendeeNames.append(name)
+                    }
+                }
+            }
+            let ctx = CalendarMeetingContext(
+                title: title,
+                attendees: attendeeNames,
+                startDate: event.startDate,
+                endDate: event.endDate
+            )
+            if seenIDs.insert(ctx.id).inserted {
+                results.append(ctx)
+                if results.count >= limit { break }
+            }
+        }
+        return results
     }
 
     // MARK: - Apple Reminders Sync (EventKit)
