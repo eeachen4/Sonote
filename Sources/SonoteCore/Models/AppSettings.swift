@@ -600,6 +600,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
     public var showFloatingCapsuleWhileRecording: Bool = true
     public var enableLiveSubtitleTranslation: Bool = false
     public var customMinutesPrompt: String = ""
+    public var customAskAIPrompts: [String] = []
 
     // Meeting Detection, Calendar & Global Hotkeys
     public var autoDetectMeetings: Bool = true
@@ -691,6 +692,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         showFloatingCapsuleWhileRecording = try c.decodeIfPresent(Bool.self, forKey: .showFloatingCapsuleWhileRecording) ?? d.showFloatingCapsuleWhileRecording
         enableLiveSubtitleTranslation = try c.decodeIfPresent(Bool.self, forKey: .enableLiveSubtitleTranslation) ?? d.enableLiveSubtitleTranslation
         customMinutesPrompt = try c.decodeIfPresent(String.self, forKey: .customMinutesPrompt) ?? d.customMinutesPrompt
+        customAskAIPrompts = try c.decodeIfPresent([String].self, forKey: .customAskAIPrompts) ?? d.customAskAIPrompts
 
         autoDetectMeetings = try c.decodeIfPresent(Bool.self, forKey: .autoDetectMeetings) ?? d.autoDetectMeetings
         detectBrowserCalls = try c.decodeIfPresent(Bool.self, forKey: .detectBrowserCalls) ?? d.detectBrowserCalls

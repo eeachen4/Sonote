@@ -397,6 +397,7 @@ public struct MeetingSession: Identifiable, Codable, Equatable, Sendable {
     public var customTemplateID: UUID?
     public var calendarAttendees: [String]
     public var tags: [String]
+    public var isPinned: Bool
 
     public init(
         id: UUID = UUID(),
@@ -416,7 +417,8 @@ public struct MeetingSession: Identifiable, Codable, Equatable, Sendable {
         template: MinutesTemplate = .general,
         customTemplateID: UUID? = nil,
         calendarAttendees: [String] = [],
-        tags: [String] = []
+        tags: [String] = [],
+        isPinned: Bool = false
     ) {
         self.id = id
         self.title = title
@@ -436,6 +438,7 @@ public struct MeetingSession: Identifiable, Codable, Equatable, Sendable {
         self.customTemplateID = customTemplateID
         self.calendarAttendees = calendarAttendees
         self.tags = tags
+        self.isPinned = isPinned
     }
 
     public init(from decoder: Decoder) throws {
@@ -458,6 +461,7 @@ public struct MeetingSession: Identifiable, Codable, Equatable, Sendable {
         customTemplateID = try c.decodeIfPresent(UUID.self, forKey: .customTemplateID)
         calendarAttendees = try c.decodeIfPresent([String].self, forKey: .calendarAttendees) ?? []
         tags = try c.decodeIfPresent([String].self, forKey: .tags) ?? []
+        isPinned = try c.decodeIfPresent(Bool.self, forKey: .isPinned) ?? false
     }
 
     public var formattedDuration: String {

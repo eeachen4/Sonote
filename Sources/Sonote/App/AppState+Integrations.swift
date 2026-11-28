@@ -177,8 +177,11 @@ extension AppState {
         let panel = NSSavePanel()
         panel.allowedContentTypes = [.pdf]
         let safeName = meeting.title.replacingOccurrences(of: "/", with: "-")
-        panel.nameFieldStringValue = "\(safeName).pdf"
-        panel.title = L("导出智能会议纪要 (PDF)", "Export Meeting Minutes (PDF)")
+        let suffix = includeTranscript ? L("-含逐字稿", "-with-transcript") : ""
+        panel.nameFieldStringValue = "\(safeName)\(suffix).pdf"
+        panel.title = includeTranscript
+            ? L("导出会议纪要与逐字稿 (PDF)", "Export Minutes & Transcript (PDF)")
+            : L("导出智能会议纪要 (PDF)", "Export Meeting Minutes (PDF)")
         if panel.runModal() == .OK, let url = panel.url {
             do {
                 try MeetingPDFExporter.exportPDF(for: meeting, includeTranscript: includeTranscript, to: url)
@@ -187,6 +190,100 @@ extension AppState {
                 statusBannerMessage = L("导出 PDF 失败：\(error.localizedDescription)", "PDF export failed: \(error.localizedDescription)")
             }
         }
+    }
+
+    public func exportSRTWithSavePanel(for meeting: MeetingSession) {
+        let content = MeetingStore.exportSRT(for: meeting)
+        guard !content.isEmpty else { return }
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.plainText]
+        let safeName = meeting.title.replacingOccurrences(of: "/", with: "-")
+        panel.nameFieldStringValue = "\(safeName).srt"
+        panel.title = L("导出会议字幕 (SRT)", "Export Subtitles (SRT)")
+        if panel.runModal() == .OK, let url = panel.url {
+            try? content.write(to: url, atomically: true, encoding: .utf8)
+            statusBannerMessage = L("已导出 SRT 字幕至 \(url.lastPathComponent)", "Exported SRT to \(url.lastPathComponent)")
+        }
+    }
+
+    public func exportVTTWithSavePanel(for meeting: MeetingSession) {
+        let content = MeetingStore.exportVTT(for: meeting)
+        guard !meeting.segments.isEmpty else { return }
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.plainText]
+        let safeName = meeting.title.replacingOccurrences(of: "/", with: "-")
+        panel.nameFieldStringValue = "\(safeName).vtt"
+        panel.title = L("导出会议字幕 (WebVTT)", "Export Subtitles (WebVTT)")
+        if panel.runModal() == .OK, let url = panel.url {
+            try? content.write(to: url, atomically: true, encoding: .utf8)
+            statusBannerMessage = L("已导出 VTT 字幕至 \(url.lastPathComponent)", "Exported VTT to \(url.lastPathComponent)")
+        }
+    }
+
+    // MARK: - Pinning, Batch Management, Glossary Auto-Learning & Custom Ask AI Prompts
+
+    public func togglePinMeeting(id: UUID) {
+        updateMeeting(id: id) { $0.isPinned.toggle() }
+    }
+
+    public func batchDeleteMeetings(ids: Set<UUID>) {
+        guard !ids.isEmpty else { return }
+        let targets = meetings.filter { ids.contains($0.id) }
+        for m in targets {
+            deleteMeeting(m)
+        }
+        statusBannerMessage = L("已删除 \(targets.count) 场会议记录", "Deleted \(targets.count) meetings")
+    }
+
+    public func batchAddTag(_ rawTag: String, to ids: Set<UUID>) {
+        let cleaned = rawTag.trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: "#", with: "")
+        guard !cleaned.isEmpty, !ids.isEmpty else { return }
+        for id in ids {
+            addTag(cleaned, to: id)
+        }
+        statusBannerMessage = L("已为 \(ids.count) 场会议添加标签 #\(cleaned)", "Added #\(cleaned) to \(ids.count) meetings")
+    }
+
+    public func batchExportMarkdownToFolder(ids: Set<UUID>) {
+        let selected = meetings.filter { ids.contains($0.id) }
+        guard !selected.isEmpty else { return }
+        let panel = NSOpenPanel()
+        panel.title = L("选择批量导出 Markdown 的目标文件夹", "Choose Folder to Export Selected Meetings (.md)")
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.canCreateDirectories = true
+        panel.allowsMultipleSelection = false
+        guard panel.runModal() == .OK, let dirURL = panel.url else { return }
+
+        let result = MarkdownFolderSyncService.shared.syncAll(meetings: selected, toFolder: dirURL.path)
+        if let err = result.errorMessage {
+            statusBannerMessage = L("批量导出失败：\(err)", "Batch export failed: \(err)")
+        } else {
+            statusBannerMessage = L("已批量导出 \(result.syncedCount) 份 Markdown 至 \(dirURL.lastPathComponent)", "Exported \(result.syncedCount) Markdown files to \(dirURL.lastPathComponent)")
+        }
+    }
+
+    @discardableResult
+    public func addGlossaryTerm(_ rawTerm: String) -> Bool {
+        let trimmed = rawTerm.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return false }
+        if settings.glossaryTerms.contains(where: { $0.caseInsensitiveCompare(trimmed) == .orderedSame }) {
+            return false
+        }
+        settings.glossaryTerms.append(trimmed)
+        statusBannerMessage = L("已将「\(trimmed)」加入专业词典，后续转写自动生效", "Added \"\(trimmed)\" to ASR glossary")
+        return true
+    }
+
+    public func addCustomAskAIPrompt(_ rawPrompt: String) {
+        let trimmed = rawPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        guard !settings.customAskAIPrompts.contains(trimmed) else { return }
+        settings.customAskAIPrompts.append(trimmed)
+    }
+
+    public func removeCustomAskAIPrompt(_ prompt: String) {
+        settings.customAskAIPrompts.removeAll { $0 == prompt }
     }
 
     // MARK: - Webhook Push, Backup Archive & On-Device MLX Controls

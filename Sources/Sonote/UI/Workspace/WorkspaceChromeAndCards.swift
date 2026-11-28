@@ -264,11 +264,25 @@ extension CompletedMeetingDocumentView {
                         }
                     }
                     Divider()
-                    Button(L("导出为 .pdf 文件...", "Export as .pdf...")) {
-                        appState.exportPDFWithSavePanel(for: meeting)
+                    Button(L("导出为 .pdf 文件（仅纪要）...", "Export as .pdf (Minutes)...")) {
+                        appState.exportPDFWithSavePanel(for: meeting, includeTranscript: false)
+                    }
+                    if !meeting.segments.isEmpty {
+                        Button(L("导出为 .pdf 文件（含逐字稿）...", "Export as .pdf (With Transcript)...")) {
+                            appState.exportPDFWithSavePanel(for: meeting, includeTranscript: true)
+                        }
                     }
                     Button(L("导出为 .md 文件...", "Export as .md...")) {
                         appState.exportMarkdownWithSavePanel(for: meeting)
+                    }
+                    if !meeting.segments.isEmpty {
+                        Divider()
+                        Button(L("导出字幕文件 (.srt)...", "Export Subtitles (.srt)...")) {
+                            appState.exportSRTWithSavePanel(for: meeting)
+                        }
+                        Button(L("导出字幕文件 (.vtt)...", "Export Subtitles (.vtt)...")) {
+                            appState.exportVTTWithSavePanel(for: meeting)
+                        }
                     }
                 } label: {
                     HStack(spacing: 4) {

@@ -21,7 +21,7 @@ enum MeetingPDFExporter {
             throw NSError(
                 domain: "Sonote.PDFExporter",
                 code: 1,
-                userInfo: [NSLocalizedDescriptionKey: "无法生成 PDF 排版内容。"]
+                userInfo: [NSLocalizedDescriptionKey: L("无法生成 PDF 排版内容。", "Unable to render PDF layout content.")]
             )
         }
 
@@ -58,7 +58,7 @@ enum MeetingPDFExporter {
             throw NSError(
                 domain: "Sonote.PDFExporter",
                 code: 2,
-                userInfo: [NSLocalizedDescriptionKey: "无法创建 PDF 输出文件。"]
+                userInfo: [NSLocalizedDescriptionKey: L("无法创建 PDF 输出文件。", "Unable to create PDF output file.")]
             )
         }
 
@@ -83,8 +83,11 @@ enum MeetingPDFExporter {
             layoutManager.drawBackground(forGlyphRange: range, at: origin)
             layoutManager.drawGlyphs(forGlyphRange: range, at: origin)
 
-            // Subtle page footer ("Sonote 声记 · 第 X / Y 页")
-            let footer = "Sonote 声记 · 第 \(pageIndex + 1) / \(textContainers.count) 页" as NSString
+            // Subtle bilingual page footer
+            let footer = L(
+                "Sonote 声记 · 第 \(pageIndex + 1) / \(textContainers.count) 页",
+                "Sonote · Page \(pageIndex + 1) of \(textContainers.count)"
+            ) as NSString
             let footerAttrs: [NSAttributedString.Key: Any] = [
                 .font: NSFont.systemFont(ofSize: 9.5),
                 .foregroundColor: NSColor(calibratedWhite: 0.55, alpha: 1.0)

@@ -1,6 +1,6 @@
 cask "sonote" do
-  version "1.7.0"
-  sha256 "e96a190b82fda891fa0ed8790177b16bc1e1e0efbf2301c053485865337f64f9"
+  version "1.8.0"
+  sha256 "8e42aef2fa7f5d45a978175203daa46f83bc177ff67e9f936bf22f409879126a"
 
   url "https://github.com/eeachen4/Sonote/releases/download/v#{version}/Sonote-#{version}-arm64.dmg"
   name "Sonote"

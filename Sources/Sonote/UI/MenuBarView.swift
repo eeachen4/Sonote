@@ -58,6 +58,19 @@ struct MenuBarView: View {
                         .foregroundStyle(AppTheme.textPrimary)
                     Spacer()
                     Button {
+                        appState.toggleSubtitleBar()
+                    } label: {
+                        Image(systemName: appState.isSubtitleBarVisible ? "captions.bubble.fill" : "captions.bubble")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(appState.isSubtitleBarVisible ? AppTheme.brandPrimary : AppTheme.textSecondary)
+                            .frame(width: 34, height: 28)
+                            .background(Capsule().fill(appState.isSubtitleBarVisible ? AppTheme.brandSoftFill : AppTheme.neutralPill))
+                            .contentShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .help(appState.isSubtitleBarVisible ? L("隐藏桌面悬浮字幕条", "Hide Live Subtitle Bar") : L("开启桌面悬浮字幕条", "Show Live Subtitle Bar"))
+
+                    Button {
                         appState.togglePauseRecording()
                     } label: {
                         Image(systemName: appState.isPaused ? "play.fill" : "pause.fill")

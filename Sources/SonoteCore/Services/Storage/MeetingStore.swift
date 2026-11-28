@@ -30,6 +30,7 @@ public struct MeetingIndexEntry: Identifiable, Codable, Equatable, Sendable {
     public var openActionItemCount: Int
     public var totalTokens: Int
     public var searchableText: String
+    public var isPinned: Bool
 
     public init(from session: MeetingSession) {
         self.id = session.id
@@ -46,6 +47,7 @@ public struct MeetingIndexEntry: Identifiable, Codable, Equatable, Sendable {
         self.segmentCount = session.segments.count
         self.openActionItemCount = session.minutes.actionItems.filter { !$0.isCompleted }.count
         self.totalTokens = session.tokenUsage.totalTokens
+        self.isPinned = session.isPinned
 
         // Compact lowercased index string for fast offline search across hundreds of meetings
         var parts: [String] = [session.title, session.sourceAppName, session.minutes.overview]
@@ -54,6 +56,23 @@ public struct MeetingIndexEntry: Identifiable, Codable, Equatable, Sendable {
         parts.append(contentsOf: session.minutes.actionItems.map { "\($0.task) \($0.owner)" })
         parts.append(contentsOf: session.segments.prefix(40).map(\.text))
         self.searchableText = parts.joined(separator: " ").lowercased()
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        title = try c.decode(String.self, forKey: .title)
+        sourceAppName = try c.decodeIfPresent(String.self, forKey: .sourceAppName) ?? "手动记录"
+        startedAt = try c.decode(Date.self, forKey: .startedAt)
+        endedAt = try c.decodeIfPresent(Date.self, forKey: .endedAt)
+        duration = try c.decodeIfPresent(TimeInterval.self, forKey: .duration) ?? 0
+        tags = try c.decodeIfPresent([String].self, forKey: .tags) ?? []
+        overviewPreview = try c.decodeIfPresent(String.self, forKey: .overviewPreview) ?? ""
+        segmentCount = try c.decodeIfPresent(Int.self, forKey: .segmentCount) ?? 0
+        openActionItemCount = try c.decodeIfPresent(Int.self, forKey: .openActionItemCount) ?? 0
+        totalTokens = try c.decodeIfPresent(Int.self, forKey: .totalTokens) ?? 0
+        searchableText = try c.decodeIfPresent(String.self, forKey: .searchableText) ?? ""
+        isPinned = try c.decodeIfPresent(Bool.self, forKey: .isPinned) ?? false
     }
 
     /// Creates a lightweight placeholder session from index metadata for instant Home startup
@@ -69,7 +88,8 @@ public struct MeetingIndexEntry: Identifiable, Codable, Equatable, Sendable {
             status: .completed,
             minutes: SmartMinutes(overview: overviewPreview, isFinalized: true),
             tokenUsage: TokenUsage(inputTokens: totalTokens, outputTokens: 0, requestCount: totalTokens > 0 ? 1 : 0, isEstimated: true),
-            tags: tags
+            tags: tags,
+            isPinned: isPinned
         )
     }
 }
@@ -870,5 +890,70 @@ public final class MeetingStore: @unchecked Sendable {
 
         parts.append("</body></html>")
         return parts.joined()
+    }
+
+    // MARK: - Subtitle Export (.srt & .vtt)
+
+    /// Exports timestamped transcript segments as standard SubRip (`.srt`) subtitles.
+    public static func exportSRT(for meeting: MeetingSession) -> String {
+        let sorted = meeting.segments.sorted { $0.timestamp < $1.timestamp }
+        guard !sorted.isEmpty else { return "" }
+
+        var blocks: [String] = []
+        blocks.reserveCapacity(sorted.count)
+        for (idx, seg) in sorted.enumerated() {
+            let start = max(0, seg.timestamp)
+            let end = subtitleEndTime(for: seg, index: idx, all: sorted, meetingDuration: meeting.duration)
+            let header = "\(idx + 1)"
+            let timing = "\(formatSubtitleTime(start, decimalSeparator: ",")) --> \(formatSubtitleTime(end, decimalSeparator: ","))"
+            let line = "[\(seg.resolvedSpeakerName)] \(seg.text.trimmingCharacters(in: .whitespacesAndNewlines))"
+            blocks.append("\(header)\n\(timing)\n\(line)")
+        }
+        return blocks.joined(separator: "\n\n") + "\n"
+    }
+
+    /// Exports timestamped transcript segments as standard WebVTT (`.vtt`) subtitles.
+    public static func exportVTT(for meeting: MeetingSession) -> String {
+        let sorted = meeting.segments.sorted { $0.timestamp < $1.timestamp }
+        guard !sorted.isEmpty else { return "WEBVTT\n" }
+
+        var blocks: [String] = ["WEBVTT"]
+        blocks.reserveCapacity(sorted.count + 1)
+        for (idx, seg) in sorted.enumerated() {
+            let start = max(0, seg.timestamp)
+            let end = subtitleEndTime(for: seg, index: idx, all: sorted, meetingDuration: meeting.duration)
+            let timing = "\(formatSubtitleTime(start, decimalSeparator: ".")) --> \(formatSubtitleTime(end, decimalSeparator: "."))"
+            let line = "<v \(seg.resolvedSpeakerName)>\(seg.text.trimmingCharacters(in: .whitespacesAndNewlines))"
+            blocks.append("\(timing)\n\(line)")
+        }
+        return blocks.joined(separator: "\n\n") + "\n"
+    }
+
+    private static func subtitleEndTime(
+        for segment: TranscriptSegment,
+        index: Int,
+        all: [TranscriptSegment],
+        meetingDuration: TimeInterval
+    ) -> TimeInterval {
+        let start = max(0, segment.timestamp)
+        // Estimate reading duration ~0.16s per character, clamped between 2.0s and 8.0s
+        let estimated = min(8.0, max(2.0, Double(segment.text.count) * 0.16))
+        if index + 1 < all.count {
+            let nextStart = max(start + 0.5, all[index + 1].timestamp - 0.08)
+            return min(start + estimated, nextStart)
+        }
+        if meetingDuration > start + 0.5 {
+            return min(start + estimated, meetingDuration)
+        }
+        return start + estimated
+    }
+
+    private static func formatSubtitleTime(_ seconds: TimeInterval, decimalSeparator: String) -> String {
+        let totalMs = max(0, Int((seconds * 1000.0).rounded()))
+        let h = totalMs / 3_600_000
+        let m = (totalMs % 3_600_000) / 60_000
+        let s = (totalMs % 60_000) / 1_000
+        let ms = totalMs % 1_000
+        return String(format: "%02d:%02d:%02d%@%03d", h, m, s, decimalSeparator, ms)
     }
 }

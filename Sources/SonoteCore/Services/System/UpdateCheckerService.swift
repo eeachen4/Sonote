@@ -41,7 +41,7 @@ public enum UpdateCheckerService {
     public static let defaultRepoSlug = "eeachen4/Sonote"
 
     public static var installedVersion: String {
-        (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String) ?? "1.7.0"
+        (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String) ?? "1.8.0"
     }
 
     public static func checkLatestRelease(

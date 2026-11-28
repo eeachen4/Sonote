@@ -71,7 +71,10 @@ struct HomeMeetingRow: View {
     let meeting: MeetingSession
     let isRecording: Bool
     let searchQuery: String
+    var isSelectionMode: Bool = false
+    var isSelected: Bool = false
     let onSelect: () -> Void
+    let onTogglePin: () -> Void
     let onCopy: () -> Void
     let onDelete: () -> Void
 
@@ -81,13 +84,20 @@ struct HomeMeetingRow: View {
     var body: some View {
         Button(action: onSelect) {
             HStack(spacing: 13) {
+                if isSelectionMode {
+                    Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                        .font(.system(size: 17))
+                        .foregroundStyle(isSelected ? AppTheme.brandPrimary : AppTheme.textMuted)
+                        .frame(width: 22)
+                }
+
                 ZStack {
                     RoundedRectangle(cornerRadius: 9, style: .continuous)
-                        .fill(isRecording ? AppTheme.brandSoftFill : AppTheme.softCardBg)
+                        .fill(isRecording ? AppTheme.brandSoftFill : (meeting.isPinned ? AppTheme.warningAmber.opacity(0.12) : AppTheme.softCardBg))
                         .frame(width: 34, height: 34)
-                    Image(systemName: isRecording ? "waveform" : "doc.text")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(isRecording ? AppTheme.brandPrimary : AppTheme.textSecondary)
+                    Image(systemName: isRecording ? "waveform" : (meeting.isPinned ? "pin.fill" : "doc.text"))
+                        .font(.system(size: 13.5, weight: .medium))
+                        .foregroundStyle(isRecording ? AppTheme.brandPrimary : (meeting.isPinned ? AppTheme.warningAmber : AppTheme.textSecondary))
                 }
 
                 VStack(alignment: .leading, spacing: 3) {
@@ -124,8 +134,18 @@ struct HomeMeetingRow: View {
 
                 Spacer(minLength: 12)
 
-                if isHovering {
+                if isHovering && !isSelectionMode {
                     HStack(spacing: 6) {
+                        Button(action: onTogglePin) {
+                            Image(systemName: meeting.isPinned ? "pin.slash" : "pin")
+                                .font(.system(size: 11.5))
+                                .foregroundStyle(meeting.isPinned ? AppTheme.warningAmber : AppTheme.textSecondary)
+                                .frame(width: 26, height: 26)
+                                .background(Circle().fill(AppTheme.neutralPill))
+                        }
+                        .buttonStyle(.plain)
+                        .help(meeting.isPinned ? L("取消置顶", "Unpin Meeting") : L("置顶会议", "Pin Meeting"))
+
                         Button(action: onCopy) {
                             Image(systemName: "doc.on.doc")
                                 .font(.system(size: 12))
@@ -166,17 +186,18 @@ struct HomeMeetingRow: View {
             .padding(.vertical, 10)
             .background(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(isHovering ? AppTheme.elevatedSurface : AppTheme.elevatedSurface.opacity(0.62))
+                    .fill(isSelected ? AppTheme.brandSoftFill.opacity(0.65) : (isHovering ? AppTheme.elevatedSurface : AppTheme.elevatedSurface.opacity(0.62)))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .strokeBorder(isHovering ? AppTheme.subtleBorder : Color.clear, lineWidth: 1)
+                    .strokeBorder(isSelected ? AppTheme.brandPrimary.opacity(0.4) : (isHovering ? AppTheme.subtleBorder : Color.clear), lineWidth: 1)
             )
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .onHover { isHovering = $0 }
         .contextMenu {
+            Button(meeting.isPinned ? L("取消置顶", "Unpin Meeting") : L("置顶会议", "Pin Meeting"), action: onTogglePin)
             Button(L("复制 Markdown 纪要", "Copy Markdown Minutes"), action: onCopy)
             Divider()
             Button(L("删除记录", "Delete Meeting"), role: .destructive, action: onDelete)

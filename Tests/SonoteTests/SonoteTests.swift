@@ -1470,6 +1470,78 @@ final class SonoteTests: XCTestCase {
         XCTAssertEqual(SpeakerSource.remote.shortLabel, "Remote")
     }
 
+    func testV18TimestampCitationsGlossaryLearningSubtitlesAndPinning() throws {
+        // 1. Explicit [MM:SS] & [H:MM:SS] timestamp citation parsing
+        let explicit1 = try XCTUnwrap(MinutesTimestampMatcher.parseExplicitCitation(in: "确定周五前完成端侧 MLX 联调 [02:18]"))
+        XCTAssertEqual(explicit1.displayText, "确定周五前完成端侧 MLX 联调")
+        XCTAssertEqual(explicit1.timestamp, 138, accuracy: 0.01)
+        XCTAssertEqual(explicit1.formattedTimestamp, "02:18")
+        XCTAssertTrue(explicit1.isExplicit)
+
+        let explicit2 = try XCTUnwrap(MinutesTimestampMatcher.parseExplicitCitation(in: "Final architecture sign-off [1:04:05]"))
+        XCTAssertEqual(explicit2.timestamp, 3845, accuracy: 0.01)
+        XCTAssertEqual(explicit2.formattedTimestamp, "1:04:05")
+
+        // 2. Automatic local fallback matching against transcript segments when no [MM:SS] tag exists
+        let segs = [
+            TranscriptSegment(timestamp: 15, speaker: .remote, speakerLabel: "Alex", text: "今天我们重点讨论 Qwen3-ASR 离线转写和 DeepFilterNet3 降噪效果。"),
+            TranscriptSegment(timestamp: 92, speaker: .me, speakerLabel: "陈晨", text: "好的，我周五前把 Obsidian 自动同步和飞书 Webhook 联调完并提测。")
+        ]
+        let matched = try XCTUnwrap(MinutesTimestampMatcher.resolve(for: "周五前完成 Obsidian 自动同步与飞书 Webhook 联调", segments: segs))
+        XCTAssertEqual(matched.timestamp, 92, accuracy: 0.01)
+        XCTAssertEqual(matched.formattedTimestamp, "01:32")
+        XCTAssertFalse(matched.isExplicit)
+
+        // 3. Glossary auto-learning from manual transcript typo edits
+        let cjkTerms = GlossarySuggestionExtractor.extractCandidateTerms(
+            original: "本次会议邀请新奇科技副总裁出席演讲。",
+            edited: "本次会议邀请星驰科技副总裁出席演讲。",
+            existingGlossary: []
+        )
+        XCTAssertEqual(cjkTerms, ["星驰"])
+
+        let fullTerm = GlossarySuggestionExtractor.extractCandidateTerms(
+            original: "我们需要接入 deepseek 模型做推理。",
+            edited: "我们需要接入 DeepSeek-R1 模型做推理。",
+            existingGlossary: ["Qwen3"]
+        )
+        XCTAssertEqual(fullTerm, ["DeepSeek-R1"])
+
+        let deduped = GlossarySuggestionExtractor.extractCandidateTerms(
+            original: "接入 deepseek 模型。",
+            edited: "接入 DeepSeek-R1 模型。",
+            existingGlossary: ["deepseek-r1"]
+        )
+        XCTAssertTrue(deduped.isEmpty)
+
+        // 4. SRT & WebVTT subtitle export
+        let meeting = MeetingSession(
+            title: "字幕导出测试",
+            duration: 120,
+            status: .completed,
+            segments: segs,
+            isPinned: true
+        )
+        let srt = MeetingStore.exportSRT(for: meeting)
+        XCTAssertTrue(srt.contains("1\n00:00:15,000 --> 00:00:"))
+        XCTAssertTrue(srt.contains("[Alex] 今天我们重点讨论 Qwen3-ASR"))
+        XCTAssertTrue(srt.contains("2\n00:01:32,000 --> 00:01:"))
+
+        let vtt = MeetingStore.exportVTT(for: meeting)
+        XCTAssertTrue(vtt.hasPrefix("WEBVTT\n\n"))
+        XCTAssertTrue(vtt.contains("00:00:15.000 --> 00:00:"))
+        XCTAssertTrue(vtt.contains("<v Alex>今天我们重点讨论 Qwen3-ASR"))
+
+        // 5. Backward-compatible decoding for isPinned & customAskAIPrompts
+        let indexEntry = MeetingIndexEntry(from: meeting)
+        XCTAssertTrue(indexEntry.isPinned)
+        XCTAssertTrue(indexEntry.toLightweightSession().isPinned)
+
+        let legacySettingsJSON = #"{"authMode":"localMLX"}"#
+        let decodedSettings = try JSONDecoder().decode(AppSettings.self, from: Data(legacySettingsJSON.utf8))
+        XCTAssertEqual(decodedSettings.customAskAIPrompts, [])
+    }
+
     func testLiveEnvironmentAndGPTIntegration() async throws {
         guard ProcessInfo.processInfo.environment["SONOTE_LIVE_VERIFY"] == "1" else {
             throw XCTSkip("Set SONOTE_LIVE_VERIFY=1 to run live macOS & GPT integration verification.")

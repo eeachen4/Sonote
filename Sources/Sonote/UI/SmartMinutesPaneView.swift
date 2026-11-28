@@ -349,6 +349,7 @@ struct DoubaoOutlineMinutesView: View {
     let meeting: MeetingSession
     @ObservedObject var appState: AppState
     @ObservedObject private var theme = ThemeManager.shared
+    var onJumpToTimestamp: ((TimeInterval) -> Void)? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
@@ -375,15 +376,11 @@ struct DoubaoOutlineMinutesView: View {
                                         .foregroundStyle(AppTheme.textPrimary)
 
                                     ForEach(Array(topic.points.enumerated()), id: \.offset) { _, point in
-                                        HStack(alignment: .top, spacing: 8) {
-                                            Text("•")
-                                                .foregroundStyle(AppTheme.textSecondary)
-                                            inlineMarkdownText(point)
-                                                .font(.system(size: 13))
-                                                .foregroundStyle(AppTheme.textPrimary.opacity(0.9))
-                                                .lineSpacing(4)
-                                                .textSelection(.enabled)
-                                        }
+                                        citedBulletRow(
+                                            text: point,
+                                            bulletColor: AppTheme.textSecondary,
+                                            textColor: AppTheme.textPrimary.opacity(0.9)
+                                        )
                                     }
                                 }
                             }
@@ -395,15 +392,11 @@ struct DoubaoOutlineMinutesView: View {
                     outlineSection(L("会议决议", "Decisions")) {
                         VStack(alignment: .leading, spacing: 7) {
                             ForEach(Array(meeting.minutes.decisions.enumerated()), id: \.offset) { _, decision in
-                                HStack(alignment: .top, spacing: 8) {
-                                    Text("•")
-                                        .foregroundStyle(AppTheme.brandPrimary)
-                                    inlineMarkdownText(decision)
-                                        .font(.system(size: 13))
-                                        .foregroundStyle(AppTheme.textPrimary)
-                                        .lineSpacing(4)
-                                        .textSelection(.enabled)
-                                }
+                                citedBulletRow(
+                                    text: decision,
+                                    bulletColor: AppTheme.brandPrimary,
+                                    textColor: AppTheme.textPrimary
+                                )
                             }
                         }
                     }
@@ -413,6 +406,9 @@ struct DoubaoOutlineMinutesView: View {
                     outlineSection(L("待办事项", "Action Items")) {
                         VStack(alignment: .leading, spacing: 8) {
                             ForEach(meeting.minutes.actionItems) { item in
+                                let citation = onJumpToTimestamp != nil
+                                    ? MinutesTimestampMatcher.resolve(for: item.task, segments: meeting.segments)
+                                    : nil
                                 HStack(alignment: .top, spacing: 8) {
                                     Button {
                                         appState.toggleActionItem(meetingID: meeting.id, actionID: item.id)
@@ -425,11 +421,17 @@ struct DoubaoOutlineMinutesView: View {
                                     .padding(.top, 1)
 
                                     VStack(alignment: .leading, spacing: 2) {
-                                        inlineMarkdownText(item.task)
-                                            .font(.system(size: 13))
-                                            .strikethrough(item.isCompleted, color: AppTheme.textMuted)
-                                            .foregroundStyle(item.isCompleted ? AppTheme.textSecondary : AppTheme.textPrimary)
-                                            .textSelection(.enabled)
+                                        HStack(alignment: .firstTextBaseline, spacing: 6) {
+                                            inlineMarkdownText(citation?.displayText ?? item.task)
+                                                .font(.system(size: 13))
+                                                .strikethrough(item.isCompleted, color: AppTheme.textMuted)
+                                                .foregroundStyle(item.isCompleted ? AppTheme.textSecondary : AppTheme.textPrimary)
+                                                .textSelection(.enabled)
+
+                                            if let citation, let jump = onJumpToTimestamp {
+                                                timestampJumpPill(citation) { jump(citation.timestamp) }
+                                            }
+                                        }
                                         let meta = [item.owner, item.dueDate].filter { !$0.isEmpty && $0 != "待定" && $0 != "TBD" }.joined(separator: " · ")
                                         if !meta.isEmpty {
                                             Text(meta)
@@ -447,21 +449,60 @@ struct DoubaoOutlineMinutesView: View {
                     outlineSection(L("待确认问题", "Open Questions")) {
                         VStack(alignment: .leading, spacing: 6) {
                             ForEach(Array(meeting.minutes.openQuestions.enumerated()), id: \.offset) { _, q in
-                                HStack(alignment: .top, spacing: 8) {
-                                    Text("•")
-                                        .foregroundStyle(AppTheme.textSecondary)
-                                    inlineMarkdownText(q)
-                                        .font(.system(size: 13))
-                                        .foregroundStyle(AppTheme.textPrimary.opacity(0.9))
-                                        .lineSpacing(4)
-                                        .textSelection(.enabled)
-                                }
+                                citedBulletRow(
+                                    text: q,
+                                    bulletColor: AppTheme.textSecondary,
+                                    textColor: AppTheme.textPrimary.opacity(0.9)
+                                )
                             }
                         }
                     }
                 }
             }
         }
+    }
+
+    @ViewBuilder
+    private func citedBulletRow(text: String, bulletColor: Color, textColor: Color) -> some View {
+        let citation = onJumpToTimestamp != nil
+            ? MinutesTimestampMatcher.resolve(for: text, segments: meeting.segments)
+            : nil
+        HStack(alignment: .top, spacing: 8) {
+            Text("•")
+                .foregroundStyle(bulletColor)
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                inlineMarkdownText(citation?.displayText ?? text)
+                    .font(.system(size: 13))
+                    .foregroundStyle(textColor)
+                    .lineSpacing(4)
+                    .textSelection(.enabled)
+
+                if let citation, let jump = onJumpToTimestamp {
+                    timestampJumpPill(citation) {
+                        jump(citation.timestamp)
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private func timestampJumpPill(_ match: MinutesTimestampMatcher.Match, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 3) {
+                Image(systemName: "play.fill")
+                    .font(.system(size: 7.5))
+                Text(match.formattedTimestamp)
+                    .font(.system(size: 10.5, weight: .medium, design: .monospaced))
+            }
+            .foregroundStyle(AppTheme.brandPrimary)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(Capsule().fill(AppTheme.brandSoftFill.opacity(0.85)))
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .help(L("跳转到 \(match.formattedTimestamp) 查看原文并回放录音", "Jump to \(match.formattedTimestamp) in transcript & play audio"))
     }
 
     private func outlineSection<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {

@@ -91,6 +91,7 @@ Sonote/
 │   │       │   ├── SpeechTranscriberEngines.swift # Apple Speech & OpenAI Transcribe fallbacks
 │   │       │   ├── SpeakerDiarizerService.swift   # Sortformer (<=4) & ECAPA online clustering (5–12+)
 │   │       │   ├── VoiceprintService.swift        # Local ECAPA-TDNN enrollment & cosine matching
+│   │       │   ├── GlossarySuggestionExtractor.swift # Auto-learns ASR glossary terms from typo fixes
 │   │       │   └── AudioFileImporter.swift        # Offline audio/video import & audio track extraction
 │   │       ├── Auth/
 │   │       │   ├── AuthManager.swift              # Credential resolution across all providers
@@ -103,7 +104,9 @@ Sonote/
 │   │       ├── Export/
 │   │       │   ├── WebhookPushService.swift       # Feishu / DingTalk / custom JSON HMAC-SHA256 webhooks
 │   │       │   └── MarkdownFolderSyncService.swift# Obsidian / Logseq YAML frontmatter .md auto-sync
-│   │       ├── Markdown/MarkdownParser.swift      # CJK-safe inline/block GFM Markdown parser
+│   │       ├── Markdown/
+│   │       │   ├── MarkdownParser.swift           # CJK-safe inline/block GFM Markdown parser
+│   │       │   └── MinutesTimestampMatcher.swift  # Explicit [MM:SS] & local segment timestamp citations
 │   │       └── System/                            # GlobalHotKeyService (Carbon), LaunchAtLogin, UpdateChecker
 │   └── Sonote/                             # Native macOS SwiftUI application target
 │       ├── App/

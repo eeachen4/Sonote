@@ -2,6 +2,19 @@
 
 All notable changes to **Sonote（声记）** are documented in this file.
 
+## [1.8.0] - 2026-11-28
+
+### Added
+- **Clickable Timestamp Citations in Minutes (`MinutesTimestampMatcher`)**: AI-generated key topic points, decisions, and action items now include clickable `▶ MM:SS` timestamp pills (parsing explicit `[MM:SS]` citations from AI or auto-matching the closest transcript segment locally for existing meetings). Clicking jumps straight to the transcript line and plays the synced recording from that second.
+- **Self-Learning ASR Glossary (`GlossarySuggestionExtractor`)**: When manually fixing a typo or proper noun in the transcript, Sonote detects the corrected term and offers a one-click banner to add it to your ASR glossary for higher accuracy in future meetings.
+- **Subtitle Export (`.srt` & `.vtt`)**: Export timestamped, speaker-labeled transcripts as standard SubRip (`.srt`) or WebVTT (`.vtt`) subtitle files directly from the Export menu (`MeetingStore.exportSRT` / `exportVTT`).
+- **Meeting Pinning & Batch Management**: Pin important meetings to a dedicated **Pinned** section at the top of Home (`MeetingSession.isPinned` + `MeetingIndexEntry.isPinned`), and use Home **Select / Batch Mode** to multi-select meetings for batch tagging, batch Markdown folder export, or batch deletion.
+- **Custom Ask AI Quick Prompts**: Save and reuse custom one-click Ask AI instructions (e.g., *“Write a 3-line Slack update”*, *“Draft client email”*) persisted in `AppSettings.customAskAIPrompts`.
+- **PDF With Transcript Option & Menu Bar Subtitle Toggle**: Added **Export .pdf (With Transcript)** alongside minutes-only PDF export, localized PDF page footers & error messages for EN/ZH, and added a quick Live Subtitle Bar toggle inside the Menu Bar recording dock.
+
+### Changed
+- **GitHub & Release Pipeline**: Merged Dependabot `softprops/action-gh-release` v3 update and generated `docs/assets/social-preview.png` (`1280×640`) for GitHub social cards.
+
 ## [1.7.0] - 2026-11-28
 
 ### Added

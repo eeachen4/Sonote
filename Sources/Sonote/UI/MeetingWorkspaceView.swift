@@ -97,6 +97,8 @@ struct CompletedMeetingDocumentView: View {
     @State var showAddTagPopover: Bool = false
     @State var newTagDraft: String = ""
     @State var showStreamingPreview: Bool = true
+    @State var glossarySuggestions: [String] = []
+    @State var pendingScrollSegmentID: UUID? = nil
     @FocusState var isComposerFocused: Bool
 
     var hasNoRecognizedContent: Bool {
@@ -198,7 +200,10 @@ struct CompletedMeetingDocumentView: View {
                                         } else {
                                             DoubaoOutlineMinutesView(
                                                 meeting: meeting,
-                                                appState: appState
+                                                appState: appState,
+                                                onJumpToTimestamp: meeting.segments.isEmpty ? nil : { ts in
+                                                    jumpToTimestampCitation(ts)
+                                                }
                                             )
                                         }
 
@@ -248,6 +253,15 @@ struct CompletedMeetingDocumentView: View {
                             }
                         }
                     }
+                    .onChange(of: pendingScrollSegmentID) { _, targetID in
+                        guard let targetID, activeTab == .transcript else { return }
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
+                            withAnimation(.easeInOut(duration: 0.25)) {
+                                scrollProxy.scrollTo(targetID, anchor: .center)
+                            }
+                            pendingScrollSegmentID = nil
+                        }
+                    }
                 }
 
                 // Synced Audio Playback Bar (when meeting has recorded/imported audio)
@@ -268,6 +282,14 @@ struct CompletedMeetingDocumentView: View {
                         text: $chatDraft,
                         isFocused: $isComposerFocused,
                         isSending: appState.isAskingAI,
+                        customPrompts: appState.settings.customAskAIPrompts,
+                        onAddCustomPrompt: { prompt in
+                            appState.addCustomAskAIPrompt(prompt)
+                            showToast(L("已保存自定义指令", "Saved Prompt"))
+                        },
+                        onRemoveCustomPrompt: { prompt in
+                            appState.removeCustomAskAIPrompt(prompt)
+                        },
                         onQuickPrompt: { prompt in
                             Task { await appState.askAI(meetingID: meeting.id, question: prompt) }
                         },
@@ -311,6 +333,8 @@ struct CompletedMeetingDocumentView: View {
             transcriptSearchQuery = ""
             renamingSegmentID = nil
             editingSegmentID = nil
+            glossarySuggestions = []
+            pendingScrollSegmentID = nil
             audioPlayer.loadIfNeeded(path: meeting.audioFilePath)
         }
         .onDisappear {
@@ -488,6 +512,21 @@ struct CompletedMeetingDocumentView: View {
                 }
             }
         }
+    }
+
+    func jumpToTimestampCitation(_ timestamp: TimeInterval) {
+        selectedSpeakerFilter = nil
+        starredOnlyFilter = false
+        transcriptSearchQuery = ""
+        let nearest = meeting.segments.min(by: { abs($0.timestamp - timestamp) < abs($1.timestamp - timestamp) })
+        withAnimation(.easeInOut(duration: 0.16)) {
+            activeTab = .transcript
+        }
+        if hasAudioFile {
+            audioPlayer.seek(to: timestamp, autoPlay: true)
+        }
+        pendingScrollSegmentID = nearest?.id
+        showToast(L("已定位至 \(MinutesTimestampMatcher.formatTimestamp(timestamp))", "Jumped to \(MinutesTimestampMatcher.formatTimestamp(timestamp))"))
     }
 
     func sendChat() {

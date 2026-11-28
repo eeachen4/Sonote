@@ -88,10 +88,16 @@ struct DoubaoAIComposerView: View {
     @Binding var text: String
     var isFocused: FocusState<Bool>.Binding
     let isSending: Bool
+    var customPrompts: [String] = []
+    var onAddCustomPrompt: ((String) -> Void)? = nil
+    var onRemoveCustomPrompt: ((String) -> Void)? = nil
     let onQuickPrompt: (String) -> Void
     let onSend: () -> Void
     let onStop: () -> Void
     @ObservedObject private var theme = ThemeManager.shared
+
+    @State private var showAddPromptPopover: Bool = false
+    @State private var newPromptDraft: String = ""
 
     private var quickTags: [(label: String, prompt: String)] {
         [
@@ -130,6 +136,69 @@ struct DoubaoAIComposerView: View {
                         ForEach(quickTags, id: \.label) { item in
                             ComposerQuickChip(label: item.label, disabled: isSending) {
                                 onQuickPrompt(item.prompt)
+                            }
+                        }
+
+                        ForEach(customPrompts, id: \.self) { custom in
+                            ComposerQuickChip(
+                                label: String(custom.prefix(16)) + (custom.count > 16 ? "…" : ""),
+                                disabled: isSending,
+                                isCustom: true,
+                                onDelete: onRemoveCustomPrompt != nil ? { onRemoveCustomPrompt?(custom) } : nil
+                            ) {
+                                onQuickPrompt(custom)
+                            }
+                            .help(custom)
+                        }
+
+                        if onAddCustomPrompt != nil {
+                            Button {
+                                newPromptDraft = ""
+                                showAddPromptPopover = true
+                            } label: {
+                                HStack(spacing: 3) {
+                                    Image(systemName: "plus")
+                                        .font(.system(size: 9.5, weight: .semibold))
+                                    Text(L("自定义指令", "Custom"))
+                                        .font(.system(size: 11, weight: .medium))
+                                }
+                                .foregroundStyle(AppTheme.brandPrimary)
+                                .padding(.horizontal, 9)
+                                .padding(.vertical, 5)
+                                .background(Capsule().fill(AppTheme.brandSoftFill.opacity(0.65)))
+                                .contentShape(Capsule())
+                            }
+                            .buttonStyle(.plain)
+                            .help(L("保存常用追问指令以便一键复用", "Save reusable custom AI quick prompts"))
+                            .popover(isPresented: $showAddPromptPopover, arrowEdge: .top) {
+                                VStack(alignment: .leading, spacing: 10) {
+                                    Text(L("新增自定义快捷指令", "New Custom Quick Prompt"))
+                                        .font(.system(size: 12.5, weight: .semibold))
+                                        .foregroundStyle(AppTheme.textPrimary)
+                                    Text(L("例如：「写成 3 句话飞书群同步消息」或「转成英文客户邮件」", "e.g. \"Write a 3-line Slack update\" or \"Draft client follow-up\""))
+                                        .font(.system(size: 11))
+                                        .foregroundStyle(AppTheme.textMuted)
+                                    CleanInputBox(
+                                        placeholder: L("输入指令内容...", "Enter prompt instruction..."),
+                                        text: $newPromptDraft
+                                    ) {
+                                        submitCustomPrompt()
+                                    }
+                                    HStack {
+                                        Spacer()
+                                        CleanPrimaryButton(
+                                            title: L("保存指令", "Save Prompt"),
+                                            icon: "plus",
+                                            disabled: newPromptDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                                        ) {
+                                            submitCustomPrompt()
+                                        }
+                                    }
+                                }
+                                .padding(13)
+                                .frame(width: 280)
+                                .background(AppTheme.elevatedSurface)
+                                .preferredColorScheme(theme.preferredColorScheme)
                             }
                         }
                     }
@@ -201,38 +270,60 @@ struct DoubaoAIComposerView: View {
             isFocused.wrappedValue = true
         }
     }
+
+    private func submitCustomPrompt() {
+        let trimmed = newPromptDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        onAddCustomPrompt?(trimmed)
+        newPromptDraft = ""
+        showAddPromptPopover = false
+    }
 }
 
 struct ComposerQuickChip: View {
     let label: String
     let disabled: Bool
+    var isCustom: Bool = false
+    var onDelete: (() -> Void)? = nil
     let action: () -> Void
     @State private var isHovering = false
 
     var body: some View {
-        Button(action: action) {
-            HStack(spacing: 4) {
-                Image(systemName: "sparkles")
-                    .font(.system(size: 9.5, weight: .semibold))
-                    .foregroundStyle(isHovering ? AppTheme.brandPrimary : AppTheme.textMuted)
-                Text(label)
-                    .font(.system(size: 11.5, weight: .medium))
-                    .foregroundStyle(isHovering ? AppTheme.brandPrimary : AppTheme.textSecondary)
+        HStack(spacing: 4) {
+            Button(action: action) {
+                HStack(spacing: 4) {
+                    Image(systemName: isCustom ? "bookmark.fill" : "sparkles")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(isHovering || isCustom ? AppTheme.brandPrimary : AppTheme.textMuted)
+                    Text(label)
+                        .font(.system(size: 11.5, weight: .medium))
+                        .foregroundStyle(isHovering ? AppTheme.brandPrimary : AppTheme.textSecondary)
+                }
+                .contentShape(Rectangle())
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
-            .background(
-                Capsule()
-                    .fill(isHovering ? AppTheme.brandSoftFill : AppTheme.softCardBg)
-            )
-            .overlay(
-                Capsule()
-                    .strokeBorder(isHovering ? AppTheme.mindMapLine : AppTheme.subtleBorder.opacity(0.7), lineWidth: 1)
-            )
-            .contentShape(Capsule())
+            .buttonStyle(.plain)
+            .disabled(disabled)
+
+            if let onDelete, isHovering {
+                Button(action: onDelete) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 8.5, weight: .bold))
+                        .foregroundStyle(AppTheme.textMuted)
+                }
+                .buttonStyle(.plain)
+                .help(L("移除此自定义指令", "Remove custom prompt"))
+            }
         }
-        .buttonStyle(.plain)
-        .disabled(disabled)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
+        .background(
+            Capsule()
+                .fill(isHovering ? AppTheme.brandSoftFill : (isCustom ? AppTheme.brandSoftFill.opacity(0.45) : AppTheme.softCardBg))
+        )
+        .overlay(
+            Capsule()
+                .strokeBorder(isHovering ? AppTheme.mindMapLine : AppTheme.subtleBorder.opacity(0.7), lineWidth: 1)
+        )
         .onHover { isHovering = $0 }
     }
 }

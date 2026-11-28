@@ -19,6 +19,11 @@ struct MainWindowView: View {
     @State private var showGlobalTodosSheet: Bool = false
     @State private var showCrossMeetingAISheet: Bool = false
     @State private var isDropTargeted: Bool = false
+    @State private var isBatchSelecting: Bool = false
+    @State private var selectedMeetingIDs: Set<UUID> = []
+    @State private var showBatchTagPopover: Bool = false
+    @State private var batchTagDraft: String = ""
+    @State private var showBatchDeleteConfirm: Bool = false
 
     var body: some View {
         Group {
@@ -279,30 +284,57 @@ struct MainWindowView: View {
                                 Spacer()
 
                                 if !appState.meetings.isEmpty {
-                                    HStack(spacing: 6) {
-                                        Image(systemName: "magnifyingglass")
-                                            .font(.system(size: 11))
-                                            .foregroundStyle(AppTheme.textMuted)
-                                        TextField(L("搜索标题、逐字稿或待办...", "Search title, transcript, or todos..."), text: $searchText)
-                                            .textFieldStyle(.plain)
-                                            .font(.system(size: 12))
-                                            .frame(width: 185)
-                                        if !searchText.isEmpty {
-                                            Button {
-                                                searchText = ""
-                                            } label: {
-                                                Image(systemName: "xmark.circle.fill")
-                                                    .font(.system(size: 11))
-                                                    .foregroundStyle(AppTheme.textMuted)
+                                    HStack(spacing: 8) {
+                                        Button {
+                                            withAnimation(.easeInOut(duration: 0.14)) {
+                                                isBatchSelecting.toggle()
+                                                if !isBatchSelecting { selectedMeetingIDs.removeAll() }
                                             }
-                                            .buttonStyle(.plain)
+                                        } label: {
+                                            HStack(spacing: 4) {
+                                                Image(systemName: isBatchSelecting ? "checkmark.circle.fill" : "checklist")
+                                                    .font(.system(size: 11))
+                                                Text(isBatchSelecting ? L("完成", "Done") : L("批量管理", "Select"))
+                                                    .font(.system(size: 11.5, weight: .medium))
+                                            }
+                                            .foregroundStyle(isBatchSelecting ? AppTheme.brandPrimary : AppTheme.textSecondary)
+                                            .padding(.horizontal, 9)
+                                            .padding(.vertical, 5)
+                                            .background(Capsule().fill(isBatchSelecting ? AppTheme.brandSoftFill : AppTheme.elevatedSurface.opacity(0.88)))
+                                            .overlay(Capsule().strokeBorder(isBatchSelecting ? Color.clear : AppTheme.subtleBorder, lineWidth: 1))
+                                            .contentShape(Capsule())
                                         }
+                                        .buttonStyle(.plain)
+
+                                        HStack(spacing: 6) {
+                                            Image(systemName: "magnifyingglass")
+                                                .font(.system(size: 11))
+                                                .foregroundStyle(AppTheme.textMuted)
+                                            TextField(L("搜索标题、逐字稿或待办...", "Search title, transcript, or todos..."), text: $searchText)
+                                                .textFieldStyle(.plain)
+                                                .font(.system(size: 12))
+                                                .frame(width: 175)
+                                            if !searchText.isEmpty {
+                                                Button {
+                                                    searchText = ""
+                                                } label: {
+                                                    Image(systemName: "xmark.circle.fill")
+                                                        .font(.system(size: 11))
+                                                        .foregroundStyle(AppTheme.textMuted)
+                                                }
+                                                .buttonStyle(.plain)
+                                            }
+                                        }
+                                        .padding(.horizontal, 10)
+                                        .padding(.vertical, 5)
+                                        .background(Capsule().fill(AppTheme.inputBackground))
+                                        .overlay(Capsule().strokeBorder(AppTheme.inputBorder, lineWidth: 1))
                                     }
-                                    .padding(.horizontal, 10)
-                                    .padding(.vertical, 5)
-                                    .background(Capsule().fill(AppTheme.inputBackground))
-                                    .overlay(Capsule().strokeBorder(AppTheme.inputBorder, lineWidth: 1))
                                 }
+                            }
+
+                            if isBatchSelecting && !filteredMeetings.isEmpty {
+                                batchSelectionToolbar
                             }
 
                             // Tag Filter Bar (visible whenever user has tagged meetings)
@@ -338,9 +370,24 @@ struct MainWindowView: View {
                                                         meeting: meeting,
                                                         isRecording: appState.activeRecordingMeetingID == meeting.id,
                                                         searchQuery: searchText,
+                                                        isSelectionMode: isBatchSelecting,
+                                                        isSelected: selectedMeetingIDs.contains(meeting.id),
                                                         onSelect: {
+                                                            if isBatchSelecting {
+                                                                if selectedMeetingIDs.contains(meeting.id) {
+                                                                    selectedMeetingIDs.remove(meeting.id)
+                                                                } else {
+                                                                    selectedMeetingIDs.insert(meeting.id)
+                                                                }
+                                                            } else {
+                                                                withAnimation(.easeInOut(duration: 0.16)) {
+                                                                    appState.selectedMeetingID = meeting.id
+                                                                }
+                                                            }
+                                                        },
+                                                        onTogglePin: {
                                                             withAnimation(.easeInOut(duration: 0.16)) {
-                                                                appState.selectedMeetingID = meeting.id
+                                                                appState.togglePinMeeting(id: meeting.id)
                                                             }
                                                         },
                                                         onCopy: {
@@ -627,14 +674,123 @@ struct MainWindowView: View {
         let items: [MeetingSession]
     }
 
+    private var batchSelectionToolbar: some View {
+        let allVisibleIDs = Set(filteredMeetings.map(\.id))
+        let allSelected = !allVisibleIDs.isEmpty && allVisibleIDs.isSubset(of: selectedMeetingIDs)
+        let selectedCount = selectedMeetingIDs.count
+
+        return HStack(spacing: 10) {
+            Button {
+                if allSelected {
+                    selectedMeetingIDs.subtract(allVisibleIDs)
+                } else {
+                    selectedMeetingIDs.formUnion(allVisibleIDs)
+                }
+            } label: {
+                Text(allSelected ? L("取消全选", "Deselect All") : L("全选当前 (\(allVisibleIDs.count))", "Select All (\(allVisibleIDs.count))"))
+                    .font(.system(size: 11.5, weight: .medium))
+                    .foregroundStyle(AppTheme.brandPrimary)
+            }
+            .buttonStyle(.plain)
+
+            Text(L("已选 \(selectedCount) 场", "\(selectedCount) selected"))
+                .font(.system(size: 11.5))
+                .foregroundStyle(AppTheme.textSecondary)
+
+            Spacer()
+
+            Button {
+                batchTagDraft = ""
+                showBatchTagPopover = true
+            } label: {
+                Label(L("打标签", "Add Tag"), systemImage: "tag")
+                    .font(.system(size: 11.5, weight: .medium))
+                    .foregroundStyle(selectedCount > 0 ? AppTheme.textPrimary : AppTheme.textMuted)
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 4.5)
+                    .background(Capsule().fill(AppTheme.elevatedSurface))
+                    .overlay(Capsule().strokeBorder(AppTheme.subtleBorder, lineWidth: 1))
+            }
+            .buttonStyle(.plain)
+            .disabled(selectedCount == 0)
+            .popover(isPresented: $showBatchTagPopover, arrowEdge: .bottom) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(L("为已选 \(selectedCount) 场会议添加标签", "Tag \(selectedCount) Selected Meetings"))
+                        .font(.system(size: 12, weight: .semibold))
+                    HStack(spacing: 6) {
+                        CleanInputBox(placeholder: L("标签名称...", "Tag name..."), text: $batchTagDraft) {
+                            appState.batchAddTag(batchTagDraft, to: selectedMeetingIDs)
+                            showBatchTagPopover = false
+                        }
+                        CleanPrimaryButton(
+                            title: L("应用", "Apply"),
+                            disabled: batchTagDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                        ) {
+                            appState.batchAddTag(batchTagDraft, to: selectedMeetingIDs)
+                            showBatchTagPopover = false
+                        }
+                    }
+                }
+                .padding(12)
+                .frame(width: 245)
+                .background(AppTheme.elevatedSurface)
+                .preferredColorScheme(theme.preferredColorScheme)
+            }
+
+            Button {
+                appState.batchExportMarkdownToFolder(ids: selectedMeetingIDs)
+            } label: {
+                Label(L("导出 .md", "Export .md"), systemImage: "square.and.arrow.up")
+                    .font(.system(size: 11.5, weight: .medium))
+                    .foregroundStyle(selectedCount > 0 ? AppTheme.textPrimary : AppTheme.textMuted)
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 4.5)
+                    .background(Capsule().fill(AppTheme.elevatedSurface))
+                    .overlay(Capsule().strokeBorder(AppTheme.subtleBorder, lineWidth: 1))
+            }
+            .buttonStyle(.plain)
+            .disabled(selectedCount == 0)
+
+            Button {
+                showBatchDeleteConfirm = true
+            } label: {
+                Label(L("删除", "Delete"), systemImage: "trash")
+                    .font(.system(size: 11.5, weight: .medium))
+                    .foregroundStyle(selectedCount > 0 ? AppTheme.recordingRed : AppTheme.textMuted)
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 4.5)
+                    .background(Capsule().fill(selectedCount > 0 ? AppTheme.recordingRed.opacity(0.10) : AppTheme.elevatedSurface))
+            }
+            .buttonStyle(.plain)
+            .disabled(selectedCount == 0)
+            .alert(L("确认删除已选会议？", "Delete Selected Meetings?"), isPresented: $showBatchDeleteConfirm) {
+                Button(L("取消", "Cancel"), role: .cancel) {}
+                Button(L("删除 (\(selectedCount))", "Delete (\(selectedCount))"), role: .destructive) {
+                    appState.batchDeleteMeetings(ids: selectedMeetingIDs)
+                    selectedMeetingIDs.removeAll()
+                    isBatchSelecting = false
+                }
+            } message: {
+                Text(L("将永久删除选中的 \(selectedCount) 场会议及其本地音频文件，此操作不可撤销。", "This permanently removes \(selectedCount) meetings and their local audio files."))
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(RoundedRectangle(cornerRadius: 11, style: .continuous).fill(AppTheme.brandSoftFill.opacity(0.6)))
+        .overlay(RoundedRectangle(cornerRadius: 11, style: .continuous).strokeBorder(AppTheme.brandPrimary.opacity(0.22), lineWidth: 1))
+    }
+
     private var groupedMeetings: [MeetingGroup] {
         let cal = Calendar.current
+        var pinned: [MeetingSession] = []
         var today: [MeetingSession] = []
         var yesterday: [MeetingSession] = []
         var earlier: [MeetingSession] = []
 
         for m in filteredMeetings {
-            if cal.isDateInToday(m.startedAt) {
+            if m.isPinned {
+                pinned.append(m)
+            } else if cal.isDateInToday(m.startedAt) {
                 today.append(m)
             } else if cal.isDateInYesterday(m.startedAt) {
                 yesterday.append(m)
@@ -644,6 +800,7 @@ struct MainWindowView: View {
         }
 
         var groups: [MeetingGroup] = []
+        if !pinned.isEmpty { groups.append(MeetingGroup(title: L("置顶会议", "Pinned"), items: pinned)) }
         if !today.isEmpty { groups.append(MeetingGroup(title: L("今天", "Today"), items: today)) }
         if !yesterday.isEmpty { groups.append(MeetingGroup(title: L("昨天", "Yesterday"), items: yesterday)) }
         if !earlier.isEmpty { groups.append(MeetingGroup(title: L("更早", "Earlier"), items: earlier)) }

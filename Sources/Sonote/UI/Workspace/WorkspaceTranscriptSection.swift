@@ -25,6 +25,10 @@ extension CompletedMeetingDocumentView {
 
     var syncedTranscriptView: some View {
         VStack(alignment: .leading, spacing: 12) {
+            if !glossarySuggestions.isEmpty {
+                glossaryAutoLearnBanner
+            }
+
             // Top Controls: Hint + In-Transcript Search + Diarization & AI Name Inference
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 8) {
@@ -259,8 +263,7 @@ extension CompletedMeetingDocumentView {
                 // Edit transcript typo button
                 Button {
                     if isEditingRow {
-                        appState.updateSegmentText(meetingID: meeting.id, segmentID: seg.id, newText: editingSegmentDraft)
-                        editingSegmentID = nil
+                        saveEditedSegment(seg)
                     } else {
                         editingSegmentDraft = seg.text
                         editingSegmentID = seg.id
@@ -294,8 +297,7 @@ extension CompletedMeetingDocumentView {
                         .foregroundStyle(AppTheme.textSecondary)
 
                         CleanPrimaryButton(title: L("保存", "Save")) {
-                            appState.updateSegmentText(meetingID: meeting.id, segmentID: seg.id, newText: editingSegmentDraft)
-                            editingSegmentID = nil
+                            saveEditedSegment(seg)
                         }
                     }
                 }
@@ -357,6 +359,84 @@ extension CompletedMeetingDocumentView {
             list.append(att)
         }
         return list
+    }
+
+    func saveEditedSegment(_ seg: TranscriptSegment) {
+        let original = seg.text
+        let edited = editingSegmentDraft
+        appState.updateSegmentText(meetingID: meeting.id, segmentID: seg.id, newText: edited)
+        editingSegmentID = nil
+
+        let candidates = GlossarySuggestionExtractor.extractCandidateTerms(
+            original: original,
+            edited: edited,
+            existingGlossary: appState.settings.glossaryTerms
+        )
+        if !candidates.isEmpty {
+            withAnimation(.easeInOut(duration: 0.16)) {
+                glossarySuggestions = candidates
+            }
+        }
+    }
+
+    var glossaryAutoLearnBanner: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "text.badge.plus")
+                .font(.system(size: 12.5, weight: .semibold))
+                .foregroundStyle(AppTheme.brandPrimary)
+
+            Text(L("检测到纠错词汇，加入专业词典以提升后续识别：", "Detected correction — add to ASR glossary?"))
+                .font(.system(size: 11.5, weight: .medium))
+                .foregroundStyle(AppTheme.textPrimary)
+
+            ForEach(glossarySuggestions, id: \.self) { term in
+                Button {
+                    if appState.addGlossaryTerm(term) {
+                        showToast(L("已加入词典「\(term)」", "Added \"\(term)\""))
+                    }
+                    withAnimation(.easeInOut(duration: 0.14)) {
+                        glossarySuggestions.removeAll { $0 == term }
+                    }
+                } label: {
+                    HStack(spacing: 3) {
+                        Image(systemName: "plus")
+                            .font(.system(size: 9, weight: .bold))
+                        Text(term)
+                            .font(.system(size: 11.5, weight: .medium))
+                    }
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 3.5)
+                    .background(Capsule().fill(AppTheme.brandPrimary))
+                    .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+
+            Spacer()
+
+            Button {
+                withAnimation(.easeInOut(duration: 0.14)) {
+                    glossarySuggestions = []
+                }
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(AppTheme.textMuted)
+            }
+            .buttonStyle(.plain)
+            .help(L("忽略", "Dismiss"))
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(AppTheme.brandSoftFill.opacity(0.75))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .strokeBorder(AppTheme.brandPrimary.opacity(0.24), lineWidth: 1)
+        )
     }
 
     func transcriptFilterPill(title: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
