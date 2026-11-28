@@ -57,6 +57,34 @@ struct TranscriptPaneView: View {
                 .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(AppTheme.subtleBorder))
                 .padding(.horizontal, 22)
                 .padding(.top, 4)
+            } else if isLiveSession, let silenceWarning = appState.liveSilenceWarning {
+                HStack(spacing: 7) {
+                    Image(systemName: "mic.slash.fill")
+                        .font(.system(size: 11))
+                        .foregroundStyle(AppTheme.warningAmber)
+                    Text(silenceWarning)
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(AppTheme.textPrimary.opacity(0.88))
+                        .lineLimit(2)
+                    Spacer()
+                    Button {
+                        appState.dismissLiveSilenceWarning()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundStyle(AppTheme.textMuted)
+                            .frame(width: 20, height: 20)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .help(L("忽略本次提醒", "Dismiss"))
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 7)
+                .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(AppTheme.warningAmber.opacity(0.10)))
+                .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(AppTheme.warningAmber.opacity(0.32), lineWidth: 1))
+                .padding(.horizontal, 22)
+                .padding(.top, 4)
             }
 
             // Clean Transcript Scroll Area

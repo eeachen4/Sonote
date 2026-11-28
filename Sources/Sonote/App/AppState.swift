@@ -162,6 +162,7 @@ public final class AppState: ObservableObject {
     @Published public var liveSubtitleTranslation: String = ""
     @Published public var pendingLiveStarHighlight: Bool = false
     @Published public var lastLiveHighlightFlash: String? = nil
+    @Published public var liveSilenceWarning: String? = nil
 
     // Crash recovery banner for an abnormally interrupted prior recording
     @Published public var recoveredInterruptedMeetingID: UUID? = nil
@@ -188,6 +189,8 @@ public final class AppState: ObservableObject {
     var activeImportTask: Task<Void, Never>?
     var activeSubtitleTranslationTask: Task<Void, Never>?
     var subtitleTranslationGeneration: UInt64 = 0
+    var consecutiveSilentSeconds: Int = 0
+    var silenceWarningDismissedForSession: Bool = false
     let recordingClock = RecordingClock()
     private var pendingSettingsSaveWorkItem: DispatchWorkItem?
 

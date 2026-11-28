@@ -22,6 +22,9 @@ extension AppState {
         lastSummarizedManualNotes = ""
         pendingLiveStarHighlight = false
         lastLiveHighlightFlash = nil
+        liveSilenceWarning = nil
+        consecutiveSilentSeconds = 0
+        silenceWarningDismissedForSession = false
         activeSubtitleTranslationTask?.cancel()
         activeSubtitleTranslationTask = nil
 
@@ -164,6 +167,9 @@ extension AppState {
         activeSubtitleTranslationTask = nil
         pendingLiveStarHighlight = false
         lastLiveHighlightFlash = nil
+        liveSilenceWarning = nil
+        consecutiveSilentSeconds = 0
+        silenceWarningDismissedForSession = false
         pendingEndedMeeting = nil
         onHidePromptPanel?()
         setCapsuleVisible(false)
@@ -233,6 +239,11 @@ extension AppState {
 
     public func toggleSubtitleBar() {
         setSubtitleBarVisible(!isSubtitleBarVisible)
+    }
+
+    public func dismissLiveSilenceWarning() {
+        silenceWarningDismissedForSession = true
+        liveSilenceWarning = nil
     }
 
     /// Smart one-click live highlight during recording:
@@ -346,6 +357,28 @@ extension AppState {
                 // Crash-safe checkpoint every 30s so duration & segments are safely flushed even during silence
                 let isCheckpoint = Int(elapsed) > 0 && Int(elapsed) % 30 == 0
                 self.updateMeeting(id: activeID, persist: isCheckpoint) { $0.duration = elapsed }
+
+                // Live silence / muted-mic guard: warn gently after 20s of zero audio signal
+                if self.systemAudioActive || self.micAudioActive {
+                    let hasLiveVoice = self.audioMeters.combinedLevel > 0.012
+                        || !self.volatileRemoteText.isEmpty
+                        || !self.volatileMeText.isEmpty
+                    if hasLiveVoice {
+                        self.consecutiveSilentSeconds = 0
+                        if self.liveSilenceWarning != nil {
+                            self.liveSilenceWarning = nil
+                        }
+                    } else {
+                        self.consecutiveSilentSeconds += 1
+                        if self.consecutiveSilentSeconds >= 20,
+                           !self.silenceWarningDismissedForSession,
+                           self.liveSilenceWarning == nil {
+                            self.liveSilenceWarning = self.micAudioActive && !self.systemAudioActive
+                                ? L("持续 20 秒未检测到麦克风声音，请检查是否已静音或选错输入设备", "No mic audio detected for 20s — check mute or input device")
+                                : L("持续 20 秒未检测到有效声音，请检查麦克风是否静音或会议音频输出", "No audio signal detected for 20s — check mic mute or meeting output")
+                        }
+                    }
+                }
             }
         }
 
