@@ -2,6 +2,24 @@
 
 All notable changes to **Sonote（声记）** are documented in this file.
 
+## [1.7.0] - 2026-11-28
+
+### Added
+- **Document-Flow Structured Minutes Editor (`MinutesEditorView`)**: Rebuilt the post-meeting editing experience with auto-wrapping multi-line inputs, numbered card-grouped Key Topics, full add/edit/delete across all 5 sections (Summary, Key Topics, Decisions, Action Items with Enter-to-add, and Open Questions), transactional draft snapshots with `⌘⏎` Save & `Esc` Cancel, automatic whitespace/blank cleanup (`SmartMinutes.sanitizedForSave()`), and automatic Obsidian Markdown folder sync on save.
+- **Interactive Audio Waveform Scrubber (`AudioWaveformExtractor` + `AudioWaveformScrubber`)**: Extracts 88-bar normalized RMS waveforms off the main thread via fast `AVAudioFile` + universal `AVAssetReader` fallback (supporting `.m4a/.mp3/.wav/.mp4/.mov`), with click/drag scrubbing, hover timestamp badges, and automatic reload on `audioFilePath` updates.
+- **Floating Desktop Live Subtitle Bar & Optional Bilingual Translation (`LiveSubtitlePanelController`)**: Draggable bottom-center translucent HUD displaying live speaker badges, real-time transcript text, and an optional second-line AI bilingual translation (`GPTClient.translateSubtitleLine`), toggleable from both the floating capsule and the live transcript toolbar.
+- **Crash-Safe Recording Checkpoints & Recovery Banner**: Automatically persists in-progress meetings every 30 seconds during recording, detects interrupted sessions on next launch (`MeetingStore.detectInterruptedMeetingIDs()`), and displays a one-click Home recovery banner to review or generate AI minutes.
+- **Open-Source Community & CI/CD Standards**: Added `CODE_OF_CONDUCT.md` (100% GitHub Community Profile), `.github/dependabot.yml`, explicit least-privilege `permissions: contents: read` in CI, and compiled build-product caching in both CI (`~2m 44s` warm runs) and Release workflows.
+
+### Changed
+- **App-Wide Input Field Craft**: Introduced crisp `AppTheme.inputBackground` / `inputBorder` / `inputHoverBorder` tokens with hover & brand focus rings, secret reveal eye toggles, legible disabled primary buttons, Settings window title localization, and eliminated all remaining system `.roundedBorder` text fields across the entire app.
+- **100% Bilingual Core Errors & Tooltips**: Localized all remaining `SonoteCore` errors, search snippets, `TokenUsage.detailedSummary`, and `SpeakerSource` labels via `SonoteLocale`.
+- **Workspace & Home Modularity**: Split `MainWindowView.swift` into `UI/Home/HomeComponents.swift` and split `MeetingWorkspaceView.swift` into `UI/Workspace/MinutesEditorView.swift` and `UI/Workspace/WorkspaceChromeAndCards.swift`.
+
+### Fixed
+- **macOS Traffic-Light Scroll Overlap**: Moved the top titlebar safe-area spacer outside the `ScrollView` in both `CompletedMeetingDocumentView` and `TranscriptPaneView` so scrolled meeting titles and transcripts never collide with the window traffic lights.
+- **Accidental Overwrite Prevention During Editing**: Hid template switcher and Regenerate controls while actively editing minutes and folded `Quick Notes` into a clean collapsible section within the same save/cancel draft.
+
 ## [1.6.0] - 2026-11-27
 
 ### Added

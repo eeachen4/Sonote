@@ -7,17 +7,17 @@ public enum SpeakerSource: String, Codable, CaseIterable, Sendable {
 
     public var displayName: String {
         switch self {
-        case .me: return "我"
-        case .remote: return "对方 / 系统声音"
-        case .mixed: return "会议音频"
+        case .me: return SonoteLocale.t("我", "Me")
+        case .remote: return SonoteLocale.t("对方 / 系统声音", "Remote / System Audio")
+        case .mixed: return SonoteLocale.t("会议音频", "Meeting Audio")
         }
     }
 
     public var shortLabel: String {
         switch self {
-        case .me: return "我"
-        case .remote: return "远端"
-        case .mixed: return "混合"
+        case .me: return SonoteLocale.t("我", "Me")
+        case .remote: return SonoteLocale.t("远端", "Remote")
+        case .mixed: return SonoteLocale.t("混合", "Mixed")
         }
     }
 }
@@ -256,18 +256,21 @@ public struct TokenUsage: Codable, Equatable, Sendable {
     }
 
     public var detailedSummary: String {
-        var parts = ["输入 \(Self.formatNumber(inputTokens))", "输出 \(Self.formatNumber(outputTokens))"]
+        var parts = [
+            SonoteLocale.t("输入 \(Self.formatNumber(inputTokens))", "In \(Self.formatNumber(inputTokens))"),
+            SonoteLocale.t("输出 \(Self.formatNumber(outputTokens))", "Out \(Self.formatNumber(outputTokens))")
+        ]
         if cachedTokens > 0 {
-            parts.append("缓存 \(Self.formatNumber(cachedTokens))")
+            parts.append(SonoteLocale.t("缓存 \(Self.formatNumber(cachedTokens))", "Cached \(Self.formatNumber(cachedTokens))"))
         }
         if reasoningTokens > 0 {
-            parts.append("思考 \(Self.formatNumber(reasoningTokens))")
+            parts.append(SonoteLocale.t("思考 \(Self.formatNumber(reasoningTokens))", "Reasoning \(Self.formatNumber(reasoningTokens))"))
         }
         if requestCount > 1 {
-            parts.append("\(requestCount) 次调用")
+            parts.append(SonoteLocale.t("\(requestCount) 次调用", "\(requestCount) calls"))
         }
         if isEstimated {
-            parts.append("估算值")
+            parts.append(SonoteLocale.t("估算值", "Est."))
         }
         return parts.joined(separator: " · ")
     }

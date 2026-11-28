@@ -83,6 +83,7 @@ Sonote/
 │   │       │   ├── SystemAudioTapCapture.swift   # macOS 15 CoreAudio Process Tap (no virtual driver)
 │   │       │   ├── MicrophoneCapture.swift       # AVAudioEngine mic capture
 │   │       │   ├── SpeechEnhancementService.swift# MLX DeepFilterNet3 v3 neural denoiser
+│   │       │   ├── AudioWaveformExtractor.swift  # AVAudioFile + AVAssetReader RMS waveform bins
 │   │       │   └── WAVEncoder.swift
 │   │       ├── Transcription/
 │   │       │   ├── TranscriptionCoordinator.swift # Silero streaming VAD + ASR + live diarization
@@ -120,7 +121,7 @@ Sonote/
 │           ├── Home/HomeComponents.swift   # Action cards, meeting rows, paste sheet & window accessor
 │           ├── OnboardingCardView.swift    # Dismissible 3-step first-launch setup checklist
 │           ├── MeetingWorkspaceView.swift  # Post-meeting document + live 2-column split workspace
-│           ├── Workspace/                  # Modular document sections (Transcript, AskAI, Audio/Popovers)
+│           ├── Workspace/                  # Modular sections (Chrome/Cards, MinutesEditor, Transcript, AskAI, Audio)
 │           ├── SmartMinutesPaneView.swift  # Summary, Mind-Map, Action Items, Ask AI
 │           ├── TranscriptPaneView.swift    # Dual-track speaker transcript + inline speaker rename
 │           ├── FloatingPanels.swift        # Non-activating HUD prompts & compact floating recording capsule

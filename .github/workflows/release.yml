@@ -26,6 +26,17 @@ jobs:
           xcodebuild -version
           swift --version
 
+      - name: Cache SwiftPM & Compiled Dependencies
+        uses: actions/cache@v6
+        with:
+          path: |
+            .build/xcode-release/SourcePackages
+            .build/xcode-release/Build/Intermediates.noindex
+            .build/xcode-release/Build/Products
+          key: xcode-release-${{ runner.os }}-${{ hashFiles('Package.resolved') }}
+          restore-keys: |
+            xcode-release-${{ runner.os }}-
+
       - name: Ensure Metal Toolchain
         run: |
           if ! xcrun --find metal >/dev/null 2>&1; then

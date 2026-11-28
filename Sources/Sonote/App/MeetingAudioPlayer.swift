@@ -1,5 +1,6 @@
 import Foundation
 import AVFoundation
+import SonoteCore
 
 /// Synchronized media player for completed meetings, powering click-to-seek transcript playback.
 /// Uses AVPlayer so both audio (.m4a/.mp3/.wav) and video (.mp4/.mov) files play reliably.
@@ -61,11 +62,14 @@ final class MeetingAudioPlayer: NSObject, ObservableObject {
         waveformLoadTask?.cancel()
         waveformSamples = []
         waveformLoadTask = Task.detached(priority: .utility) { [weak self] in
-            let bins = Self.extractWaveformBins(from: url, binCount: 88)
+            let extracted = AudioWaveformExtractor.extract(from: url, binCount: 88)
             guard !Task.isCancelled else { return }
             await MainActor.run { [weak self] in
                 guard let self, self.loadedFilePath == path else { return }
-                self.waveformSamples = bins
+                self.waveformSamples = extracted.bins
+                if self.duration <= 0 && extracted.duration > 0 {
+                    self.duration = extracted.duration
+                }
             }
         }
 
@@ -164,63 +168,9 @@ final class MeetingAudioPlayer: NSObject, ObservableObject {
         waveformSamples = []
     }
 
-    /// Reads mono/multi-channel audio frames into `binCount` normalized RMS bars (`0.08...1.0`).
+    /// Reads mono/multi-channel audio or video frames into `binCount` normalized RMS bars (`0.10...1.0`).
     nonisolated static func extractWaveformBins(from url: URL, binCount: Int = 88) -> [Float] {
-        guard binCount > 0, let file = try? AVAudioFile(forReading: url) else { return [] }
-        let totalFrames = Int(file.length)
-        guard totalFrames > 0 else { return [] }
-
-        let format = file.processingFormat
-        let framesPerBin = max(1, totalFrames / binCount)
-        let chunkSize = min(65_536, max(4096, framesPerBin))
-        guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(chunkSize)) else {
-            return []
-        }
-
-        var rawBins = [Float](repeating: 0, count: binCount)
-        var counts = [Int](repeating: 0, count: binCount)
-        var globalFrame = 0
-
-        while globalFrame < totalFrames {
-            let remaining = totalFrames - globalFrame
-            let toRead = AVAudioFrameCount(min(chunkSize, remaining))
-            do {
-                try file.read(into: buffer, frameCount: toRead)
-            } catch {
-                break
-            }
-            let readCount = Int(buffer.frameLength)
-            if readCount == 0 { break }
-
-            if let channelData = buffer.floatChannelData {
-                let ptr = channelData[0]
-                // Stride for fast decoding on 1-2h recordings while keeping visual accuracy
-                let strideStep = max(1, readCount / 2048)
-                var i = 0
-                while i < readCount {
-                    let binIdx = min(binCount - 1, (globalFrame + i) * binCount / totalFrames)
-                    let s = ptr[i]
-                    rawBins[binIdx] += s * s
-                    counts[binIdx] += 1
-                    i += strideStep
-                }
-            }
-            globalFrame += readCount
-        }
-
-        var rmsBins = [Float](repeating: 0, count: binCount)
-        var maxRMS: Float = 0.0001
-        for i in 0..<binCount {
-            if counts[i] > 0 {
-                let rms = sqrt(rawBins[i] / Float(counts[i]))
-                rmsBins[i] = rms
-                if rms > maxRMS { maxRMS = rms }
-            }
-        }
-        return rmsBins.map { val in
-            let normalized = pow(min(1.0, val / maxRMS), 0.72)
-            return max(0.10, min(1.0, normalized))
-        }
+        AudioWaveformExtractor.extractBins(from: url, binCount: binCount)
     }
 
     static func formatTime(_ seconds: TimeInterval) -> String {

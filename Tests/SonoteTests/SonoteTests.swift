@@ -1431,6 +1431,45 @@ final class SonoteTests: XCTestCase {
         XCTAssertNil(cleaned.rawMarkdownFallback)
     }
 
+    func testAudioWaveformExtractorAndLocalizedTokenUsage() throws {
+        // 1. Synthesize a 1-second 16kHz WAV with quiet first half & loud second half
+        let sampleRate = 16_000
+        var samples = [Float](repeating: 0, count: sampleRate)
+        for i in 0..<sampleRate {
+            let amp: Float = i < sampleRate / 2 ? 0.08 : 0.75
+            samples[i] = amp * sin(2.0 * .pi * 440.0 * Float(i) / Float(sampleRate))
+        }
+        let wavData = WAVEncoder.encodeMono16kWAV(samples: samples)
+        let tmpURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("sonote-wave-test-\(UUID().uuidString).wav")
+        try wavData.write(to: tmpURL)
+        defer { try? FileManager.default.removeItem(at: tmpURL) }
+
+        let extracted = AudioWaveformExtractor.extract(from: tmpURL, binCount: 40)
+        XCTAssertEqual(extracted.bins.count, 40)
+        XCTAssertEqual(extracted.duration, 1.0, accuracy: 0.05)
+        let firstHalfAvg = extracted.bins[0..<20].reduce(0, +) / 20.0
+        let secondHalfAvg = extracted.bins[20..<40].reduce(0, +) / 20.0
+        XCTAssertGreaterThan(secondHalfAvg, firstHalfAvg * 2.0, "Loud second half should have visibly taller waveform bars")
+
+        // 2. TokenUsage.detailedSummary & SpeakerSource bilingual localization
+        let usage = TokenUsage(inputTokens: 1200, outputTokens: 350, cachedTokens: 800, reasoningTokens: 120, requestCount: 2, isEstimated: true)
+        let previousLang = SonoteLocale.isEnglish
+        defer { SonoteLocale.isEnglish = previousLang }
+
+        SonoteLocale.isEnglish = false
+        XCTAssertTrue(usage.detailedSummary.contains("输入"))
+        XCTAssertTrue(usage.detailedSummary.contains("缓存"))
+        XCTAssertEqual(SpeakerSource.me.displayName, "我")
+
+        SonoteLocale.isEnglish = true
+        XCTAssertTrue(usage.detailedSummary.contains("In 1,200"))
+        XCTAssertTrue(usage.detailedSummary.contains("Cached 800"))
+        XCTAssertTrue(usage.detailedSummary.contains("2 calls"))
+        XCTAssertEqual(SpeakerSource.me.displayName, "Me")
+        XCTAssertEqual(SpeakerSource.remote.shortLabel, "Remote")
+    }
+
     func testLiveEnvironmentAndGPTIntegration() async throws {
         guard ProcessInfo.processInfo.environment["SONOTE_LIVE_VERIFY"] == "1" else {
             throw XCTSkip("Set SONOTE_LIVE_VERIFY=1 to run live macOS & GPT integration verification.")

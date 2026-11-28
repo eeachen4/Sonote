@@ -8,6 +8,11 @@ struct AudioPlaybackStrip: View {
     @ObservedObject var player: MeetingAudioPlayer
     @ObservedObject private var theme = ThemeManager.shared
     @Binding var autoFollowTranscript: Bool
+    var fallbackDuration: TimeInterval = 0
+
+    private var effectiveDuration: TimeInterval {
+        player.duration > 0 ? player.duration : fallbackDuration
+    }
 
     var body: some View {
         HStack(spacing: 9) {
@@ -62,14 +67,14 @@ struct AudioPlaybackStrip: View {
 
             AudioWaveformScrubber(
                 samples: player.waveformSamples,
-                progress: player.duration > 0 ? min(1, max(0, player.currentTime / player.duration)) : 0,
-                duration: player.duration
+                progress: effectiveDuration > 0 ? min(1, max(0, player.currentTime / effectiveDuration)) : 0,
+                duration: effectiveDuration
             ) { newFraction in
-                let target = newFraction * max(0.1, player.duration)
+                let target = newFraction * max(0.1, effectiveDuration)
                 player.seek(to: target, autoPlay: player.isPlaying)
             }
 
-            Text(MeetingAudioPlayer.formatTime(player.duration))
+            Text(MeetingAudioPlayer.formatTime(effectiveDuration))
                 .font(.system(size: 11.5, design: .monospaced))
                 .foregroundStyle(AppTheme.textMuted)
                 .frame(width: 42, alignment: .leading)
