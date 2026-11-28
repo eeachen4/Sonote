@@ -168,8 +168,12 @@ extension AppState {
         panel.title = L("导出智能会议纪要 (Markdown)", "Export Meeting Minutes (Markdown)")
         if panel.runModal() == .OK, let url = panel.url {
             let md = MeetingStore.exportMarkdown(for: meeting, includeTranscript: true)
-            try? md.write(to: url, atomically: true, encoding: .utf8)
-            statusBannerMessage = L("已导出至 \(url.lastPathComponent)", "Exported to \(url.lastPathComponent)")
+            do {
+                try md.write(to: url, atomically: true, encoding: .utf8)
+                statusBannerMessage = L("已导出至 \(url.lastPathComponent)", "Exported to \(url.lastPathComponent)")
+            } catch {
+                reportExportError(format: "Markdown", error: error)
+            }
         }
     }
 
@@ -187,7 +191,7 @@ extension AppState {
                 try MeetingPDFExporter.exportPDF(for: meeting, includeTranscript: includeTranscript, to: url)
                 statusBannerMessage = L("已导出 PDF 至 \(url.lastPathComponent)", "Exported PDF to \(url.lastPathComponent)")
             } catch {
-                statusBannerMessage = L("导出 PDF 失败：\(error.localizedDescription)", "PDF export failed: \(error.localizedDescription)")
+                reportExportError(format: "PDF", error: error)
             }
         }
     }
@@ -201,8 +205,12 @@ extension AppState {
         panel.nameFieldStringValue = "\(safeName).srt"
         panel.title = L("导出会议字幕 (SRT)", "Export Subtitles (SRT)")
         if panel.runModal() == .OK, let url = panel.url {
-            try? content.write(to: url, atomically: true, encoding: .utf8)
-            statusBannerMessage = L("已导出 SRT 字幕至 \(url.lastPathComponent)", "Exported SRT to \(url.lastPathComponent)")
+            do {
+                try content.write(to: url, atomically: true, encoding: .utf8)
+                statusBannerMessage = L("已导出 SRT 字幕至 \(url.lastPathComponent)", "Exported SRT to \(url.lastPathComponent)")
+            } catch {
+                reportExportError(format: "SRT", error: error)
+            }
         }
     }
 
@@ -215,9 +223,24 @@ extension AppState {
         panel.nameFieldStringValue = "\(safeName).vtt"
         panel.title = L("导出会议字幕 (WebVTT)", "Export Subtitles (WebVTT)")
         if panel.runModal() == .OK, let url = panel.url {
-            try? content.write(to: url, atomically: true, encoding: .utf8)
-            statusBannerMessage = L("已导出 VTT 字幕至 \(url.lastPathComponent)", "Exported VTT to \(url.lastPathComponent)")
+            do {
+                try content.write(to: url, atomically: true, encoding: .utf8)
+                statusBannerMessage = L("已导出 VTT 字幕至 \(url.lastPathComponent)", "Exported VTT to \(url.lastPathComponent)")
+            } catch {
+                reportExportError(format: "WebVTT", error: error)
+            }
         }
+    }
+
+    private func reportExportError(format: String, error: Error) {
+        let msg = L("导出 \(format) 失败：\(error.localizedDescription)", "\(format) export failed: \(error.localizedDescription)")
+        statusBannerMessage = msg
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = L("文件导出失败", "Export Failed")
+        alert.informativeText = msg
+        alert.addButton(withTitle: L("好的", "OK"))
+        alert.runModal()
     }
 
     // MARK: - Pinning, Batch Management, Glossary Auto-Learning & Custom Ask AI Prompts
@@ -333,6 +356,7 @@ extension AppState {
         panel.nameFieldStringValue = "Sonote-Backup-\(df.string(from: Date())).zip"
         panel.title = L("导出 Sonote（声记）全库备份（不含 API 密钥）", "Export Sonote Full Library Backup (No API Keys)")
         guard panel.runModal() == .OK, let url = panel.url else { return nil }
+        flushPendingPersistence()
         do {
             try ArchiveBackupService.exportArchive(to: url, includeAudioFiles: includeAudio)
             let msg = L("已导出全库备份至 \(url.lastPathComponent)", "Exported backup to \(url.lastPathComponent)")

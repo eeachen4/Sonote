@@ -336,8 +336,8 @@ struct LiveCapsuleView: View {
                     .font(.system(size: 13.5, weight: .semibold, design: .monospaced))
                     .foregroundStyle(AppTheme.textPrimary)
 
-                MiniDottedWaveformView(
-                    level: max(appState.systemAudioLevel, appState.micAudioLevel),
+                MeteredMiniDottedWaveformView(
+                    meters: appState.audioMeters,
                     isActive: appState.systemAudioActive || appState.micAudioActive,
                     isPaused: appState.isPaused
                 )
@@ -465,7 +465,7 @@ struct LiveCapsuleView: View {
     }
 }
 
-private struct MiniDottedWaveformView: View {
+struct MiniDottedWaveformView: View {
     let level: Float
     let isActive: Bool
     let isPaused: Bool

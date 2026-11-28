@@ -22,17 +22,86 @@ public final class AppState: ObservableObject {
 
     @Published public var settings: AppSettings {
         didSet {
-            ThemeManager.shared.sync(with: settings)
-            store.saveSettings(settings)
+            handleSettingsDidChange(from: oldValue, to: settings)
+        }
+    }
+
+    private func handleSettingsDidChange(from oldValue: AppSettings, to newValue: AppSettings) {
+        if oldValue.appearanceMode != newValue.appearanceMode
+            || oldValue.accentTheme != newValue.accentTheme
+            || oldValue.interfaceLanguage != newValue.interfaceLanguage
+            || oldValue.fontScale != newValue.fontScale {
+            ThemeManager.shared.sync(with: newValue)
+        }
+
+        // Write ONLY changed secrets to Keychain immediately; debounce settings.json writes off MainActor
+        store.saveChangedSecrets(newValue, previous: oldValue)
+        scheduleDebouncedSettingsSave(newValue)
+
+        let authChanged = oldValue.authMode != newValue.authMode
+            || oldValue.authFilePath != newValue.authFilePath
+            || oldValue.apiKey != newValue.apiKey
+            || oldValue.apiBaseURL != newValue.apiBaseURL
+            || oldValue.model != newValue.model
+            || oldValue.codexModel != newValue.codexModel
+            || oldValue.deepSeekAPIKey != newValue.deepSeekAPIKey
+            || oldValue.deepSeekBaseURL != newValue.deepSeekBaseURL
+            || oldValue.deepSeekModel != newValue.deepSeekModel
+            || oldValue.qwenAPIKey != newValue.qwenAPIKey
+            || oldValue.qwenBaseURL != newValue.qwenBaseURL
+            || oldValue.qwenModel != newValue.qwenModel
+            || oldValue.domesticProvider != newValue.domesticProvider
+            || oldValue.domesticAPIKey != newValue.domesticAPIKey
+            || oldValue.domesticBaseURL != newValue.domesticBaseURL
+            || oldValue.domesticModel != newValue.domesticModel
+            || oldValue.claudeAPIKey != newValue.claudeAPIKey
+            || oldValue.claudeBaseURL != newValue.claudeBaseURL
+            || oldValue.claudeModel != newValue.claudeModel
+            || oldValue.geminiAPIKey != newValue.geminiAPIKey
+            || oldValue.geminiBaseURL != newValue.geminiBaseURL
+            || oldValue.geminiModel != newValue.geminiModel
+            || oldValue.localMLXLLMModelID != newValue.localMLXLLMModelID
+        if authChanged {
             refreshAuthInspection()
-            detector.configure(settings: settings) { [weak self] in
+        }
+
+        let detectionChanged = oldValue.autoDetectMeetings != newValue.autoDetectMeetings
+            || oldValue.detectBrowserCalls != newValue.detectBrowserCalls
+            || oldValue.promptOnMeetingEnd != newValue.promptOnMeetingEnd
+            || oldValue.monitoredBundleIDs != newValue.monitoredBundleIDs
+            || oldValue.ignoredBundleIDs != newValue.ignoredBundleIDs
+        if detectionChanged {
+            detector.configure(settings: newValue) { [weak self] in
                 self?.isRecordingOrPaused ?? false
             }
+        }
+
+        if oldValue.enableGlobalHotKeys != newValue.enableGlobalHotKeys
+            || oldValue.globalHotKeyPreset != newValue.globalHotKeyPreset {
             GlobalHotKeyService.shared.configure(
-                enabled: settings.enableGlobalHotKeys,
-                preset: settings.globalHotKeyPreset
+                enabled: newValue.enableGlobalHotKeys,
+                preset: newValue.globalHotKeyPreset
             )
         }
+    }
+
+    private func scheduleDebouncedSettingsSave(_ snapshot: AppSettings) {
+        pendingSettingsSaveWorkItem?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            self?.store.saveSettingsJSONAsync(snapshot)
+        }
+        pendingSettingsSaveWorkItem = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25, execute: work)
+    }
+
+    /// Flushes any debounced settings write and queued background meeting saves synchronously.
+    public func flushPendingPersistence() {
+        if let pending = pendingSettingsSaveWorkItem {
+            pending.cancel()
+            pendingSettingsSaveWorkItem = nil
+            store.saveSettingsJSONAsync(settings)
+        }
+        store.flushPendingWrites()
     }
 
     @Published public var authInspection: AuthInspectionResult
@@ -50,12 +119,11 @@ public final class AppState: ObservableObject {
     @Published public var voiceprints: [VoiceprintProfile] = []
     private var hydratedMeetingIDs: Set<UUID> = []
 
-    // Live audio capture status & meters
+    // Live audio capture status (high-frequency meters isolated in `audioMeters` to avoid AppState invalidation)
     @Published public var isPaused: Bool = false
     @Published public var systemAudioActive: Bool = false
     @Published public var micAudioActive: Bool = false
-    @Published public var systemAudioLevel: Float = 0
-    @Published public var micAudioLevel: Float = 0
+    public let audioMeters = AudioMeterState()
 
     // Live volatile streaming transcription
     @Published public var volatileRemoteText: String = ""
@@ -107,9 +175,10 @@ public final class AppState: ObservableObject {
     var lastSummarizedSegmentCount: Int = 0
     var lastSummarizedManualNotes: String = ""
     var activeAskAITask: Task<Void, Never>?
-    var activeRecordingStartDate: Date?
-    var accumulatedPausedSeconds: TimeInterval = 0
-    var pauseStartedAt: Date?
+    var activeSubtitleTranslationTask: Task<Void, Never>?
+    var subtitleTranslationGeneration: UInt64 = 0
+    let recordingClock = RecordingClock()
+    private var pendingSettingsSaveWorkItem: DispatchWorkItem?
 
     // Callbacks wired by AppDelegate / SwiftUI for NSPanel & main NSWindow management
     public weak var trackedMainWindow: NSWindow?
@@ -418,7 +487,7 @@ public final class AppState: ObservableObject {
         hydratedMeetingIDs.insert(id)
         mutate(&meetings[idx])
         if persist {
-            store.saveMeeting(meetings[idx])
+            store.saveMeetingAsync(meetings[idx])
         }
     }
 

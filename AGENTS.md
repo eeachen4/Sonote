@@ -82,6 +82,7 @@ Sonote/
 │   │       │   ├── DualAudioCaptureManager.swift # Dual-track orchestrator, hot-swap reconnect, .m4a mix
 │   │       │   ├── SystemAudioTapCapture.swift   # macOS 15 CoreAudio Process Tap (no virtual driver)
 │   │       │   ├── MicrophoneCapture.swift       # AVAudioEngine mic capture
+│   │       │   ├── RecordingClock.swift          # Thread-safe pause-aware recording timeline clock
 │   │       │   ├── SpeechEnhancementService.swift# MLX DeepFilterNet3 v3 neural denoiser
 │   │       │   ├── AudioWaveformExtractor.swift  # AVAudioFile + AVAssetReader RMS waveform bins
 │   │       │   └── WAVEncoder.swift
@@ -116,6 +117,7 @@ Sonote/
 │       │   ├── AppState+MinutesAI.swift    # Live/final AI summary, Obsidian auto-sync & Ask AI
 │       │   ├── AppState+VoiceprintsAndImport.swift # Media import, diarization & voiceprint enrollment
 │       │   ├── AppState+Integrations.swift # Tags, Reminders, Webhooks, Obsidian sync, Backup & MLX
+│       │   ├── AudioMeterState.swift       # Isolated 25Hz throttled audio level meters
 │       │   ├── MeetingAudioPlayer.swift    # Variable-speed playback synced to transcript timestamps
 │       │   └── MeetingPDFExporter.swift    # Paginated A4 PDF renderer
 │       └── UI/

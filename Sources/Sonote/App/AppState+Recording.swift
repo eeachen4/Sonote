@@ -17,10 +17,11 @@ extension AppState {
         lastSummarizedCharCount = 0
         lastSummarizedSegmentCount = 0
         lastSummarizedManualNotes = ""
-        accumulatedPausedSeconds = 0
-        pauseStartedAt = nil
+        activeSubtitleTranslationTask?.cancel()
+        activeSubtitleTranslationTask = nil
 
         let now = Date()
+        recordingClock.start(at: now)
         var calendarContext: CalendarMeetingContext? = nil
         if settings.enableCalendarIntegration {
             calendarContext = CalendarContextService.shared.currentMeetingContext(at: now)
@@ -46,25 +47,20 @@ extension AppState {
         meetings.insert(session, at: 0)
         selectedMeetingID = session.id
         activeRecordingMeetingID = session.id
-        activeRecordingStartDate = now
         isPaused = false
-        store.saveMeeting(session)
+        audioMeters.reset()
+        store.saveMeetingAsync(session)
         detector.markRecordingStarted(for: detectedApp)
 
-        // Wire audio buffers -> meters + transcriber
+        // Wire audio buffers -> isolated throttled meter + transcriber (no MainActor Task per buffer)
+        let meters = self.audioMeters
         audioManager.onSystemBuffer = { [weak self] buffer, level in
             self?.transcriptionCoordinator.feedSystemAudio(buffer)
-            Task { @MainActor [weak self] in
-                guard let self else { return }
-                self.systemAudioLevel = self.systemAudioLevel * 0.45 + level * 0.55
-            }
+            meters.ingest(system: level)
         }
         audioManager.onMicBuffer = { [weak self] buffer, level in
             self?.transcriptionCoordinator.feedMicrophoneAudio(buffer)
-            Task { @MainActor [weak self] in
-                guard let self else { return }
-                self.micAudioLevel = self.micAudioLevel * 0.45 + level * 0.55
-            }
+            meters.ingest(mic: level)
         }
         audioManager.onDeviceRouteChanged = { [weak self] notice in
             Task { @MainActor [weak self] in
@@ -118,6 +114,7 @@ extension AppState {
                 captureRemote: report.systemAudioActive,
                 captureMic: report.microphoneActive,
                 sessionStartDate: now,
+                recordingClock: recordingClock,
                 extraContextHint: combinedHotwords,
                 voiceprintProfiles: voiceprints
             )
@@ -138,15 +135,11 @@ extension AppState {
         isPaused.toggle()
         audioManager.setPaused(isPaused)
         if isPaused {
-            pauseStartedAt = Date()
-            systemAudioLevel = 0
-            micAudioLevel = 0
+            recordingClock.pause()
+            audioMeters.reset()
             updateMeeting(id: activeID) { $0.status = .paused }
         } else {
-            if let pauseStartedAt {
-                accumulatedPausedSeconds += Date().timeIntervalSince(pauseStartedAt)
-            }
-            pauseStartedAt = nil
+            recordingClock.resume()
             updateMeeting(id: activeID) { $0.status = .recording }
         }
     }
@@ -155,6 +148,8 @@ extension AppState {
         guard let activeID = activeRecordingMeetingID else { return }
 
         stopTimers()
+        activeSubtitleTranslationTask?.cancel()
+        activeSubtitleTranslationTask = nil
         pendingEndedMeeting = nil
         onHidePromptPanel?()
         setCapsuleVisible(false)
@@ -165,14 +160,9 @@ extension AppState {
         refreshAudioStorageStats()
         await transcriptionCoordinator.stop()
 
-        // Compute exact elapsed duration before resetting timers
-        let exactElapsed: TimeInterval
-        if let startDate = activeRecordingStartDate {
-            let extraPause = pauseStartedAt.map { Date().timeIntervalSince($0) } ?? 0
-            exactElapsed = max(0, Date().timeIntervalSince(startDate) - accumulatedPausedSeconds - extraPause)
-        } else {
-            exactElapsed = activeRecordingMeeting?.duration ?? 0
-        }
+        // Compute exact pause-adjusted elapsed duration before resetting the clock
+        let exactElapsed = max(recordingClock.elapsed(), activeRecordingMeeting?.duration ?? 0)
+        recordingClock.reset()
 
         // Commit any leftover volatile text if substantial
         let leftRemote = volatileRemoteText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -188,11 +178,9 @@ extension AppState {
         volatileMeText = ""
         systemAudioActive = false
         micAudioActive = false
-        systemAudioLevel = 0
-        micAudioLevel = 0
+        audioMeters.reset()
         isPaused = false
         activeRecordingMeetingID = nil
-        activeRecordingStartDate = nil
         detector.resetAfterRecordingStopped()
 
         let hasContent: Bool = {
@@ -247,12 +235,18 @@ extension AppState {
     }
 
     func translateLatestSubtitle(_ text: String) {
+        activeSubtitleTranslationTask?.cancel()
+        subtitleTranslationGeneration &+= 1
+        let gen = subtitleTranslationGeneration
         let snapshot = settings
-        Task { [weak self] in
+
+        activeSubtitleTranslationTask = Task { [weak self] in
             guard let self else { return }
             if let translated = await self.gptClient.translateSubtitleLine(text, settings: snapshot) {
+                guard !Task.isCancelled else { return }
                 await MainActor.run { [weak self] in
-                    self?.liveSubtitleTranslation = translated
+                    guard let self, self.subtitleTranslationGeneration == gen, self.isSubtitleBarVisible else { return }
+                    self.liveSubtitleTranslation = translated
                 }
             }
         }
@@ -284,9 +278,8 @@ extension AppState {
             Task { @MainActor [weak self] in
                 guard let self,
                       let activeID = self.activeRecordingMeetingID,
-                      let startDate = self.activeRecordingStartDate,
                       !self.isPaused else { return }
-                let elapsed = max(0, Date().timeIntervalSince(startDate) - self.accumulatedPausedSeconds)
+                let elapsed = self.recordingClock.elapsed()
                 // Crash-safe checkpoint every 30s so duration & segments are safely flushed even during silence
                 let isCheckpoint = Int(elapsed) > 0 && Int(elapsed) % 30 == 0
                 self.updateMeeting(id: activeID, persist: isCheckpoint) { $0.duration = elapsed }

@@ -77,7 +77,7 @@ public final class TranscriptionCoordinator: @unchecked Sendable {
     private var remoteTranscriber: AudioTrackTranscriber?
     private var micTranscriber: AudioTrackTranscriber?
     private let echoDeduplicator = EchoDeduplicator()
-    private var sessionStartDate: Date = Date()
+    private var recordingClock = RecordingClock()
     private var activeSettings: AppSettings = AppSettings()
 
     public var onVolatileUpdate: (@Sendable (SpeakerSource, String) -> Void)?
@@ -92,10 +92,17 @@ public final class TranscriptionCoordinator: @unchecked Sendable {
         captureRemote: Bool,
         captureMic: Bool,
         sessionStartDate: Date,
+        recordingClock: RecordingClock? = nil,
         extraContextHint: String = "",
         voiceprintProfiles: [VoiceprintProfile] = []
     ) async -> [String] {
-        self.sessionStartDate = sessionStartDate
+        if let recordingClock {
+            self.recordingClock = recordingClock
+        } else {
+            let freshClock = RecordingClock()
+            freshClock.start(at: sessionStartDate)
+            self.recordingClock = freshClock
+        }
         self.activeSettings = settings
         self.echoDeduplicator.reset()
         var notices: [String] = []
@@ -191,7 +198,7 @@ public final class TranscriptionCoordinator: @unchecked Sendable {
         }
         let commitWithLabel: @Sendable (String, String?) -> Void = { [weak self] text, dynamicLabel in
             guard let self else { return }
-            let elapsed = max(0, Date().timeIntervalSince(self.sessionStartDate))
+            let elapsed = self.recordingClock.elapsed()
             let segment = TranscriptSegment(
                 timestamp: elapsed,
                 createdAt: Date(),

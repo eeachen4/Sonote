@@ -351,6 +351,13 @@ struct DoubaoOutlineMinutesView: View {
     @ObservedObject private var theme = ThemeManager.shared
     var onJumpToTimestamp: ((TimeInterval) -> Void)? = nil
 
+    @State private var citationCache: [String: MinutesTimestampMatcher.Match] = [:]
+
+    private var citationCacheKey: String {
+        let m = meeting.minutes
+        return "\(meeting.id.uuidString)|\(m.lastUpdatedAt.timeIntervalSince1970)|\(meeting.segments.count)|\(m.topics.count)|\(m.decisions.count)|\(m.actionItems.count)|\(m.openQuestions.count)|\(onJumpToTimestamp != nil)"
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             if let fallback = meeting.minutes.rawMarkdownFallback, !fallback.isEmpty {
@@ -406,9 +413,7 @@ struct DoubaoOutlineMinutesView: View {
                     outlineSection(L("待办事项", "Action Items")) {
                         VStack(alignment: .leading, spacing: 8) {
                             ForEach(meeting.minutes.actionItems) { item in
-                                let citation = onJumpToTimestamp != nil
-                                    ? MinutesTimestampMatcher.resolve(for: item.task, segments: meeting.segments)
-                                    : nil
+                                let citation = onJumpToTimestamp != nil ? citationCache[item.task] : nil
                                 HStack(alignment: .top, spacing: 8) {
                                     Button {
                                         appState.toggleActionItem(meetingID: meeting.id, actionID: item.id)
@@ -460,13 +465,38 @@ struct DoubaoOutlineMinutesView: View {
                 }
             }
         }
+        .task(id: citationCacheKey) {
+            rebuildCitationCache()
+        }
+    }
+
+    private func rebuildCitationCache() {
+        guard onJumpToTimestamp != nil else {
+            citationCache = [:]
+            return
+        }
+        let segments = meeting.segments
+        var candidates: [String] = []
+        for topic in meeting.minutes.topics {
+            candidates.append(contentsOf: topic.points)
+        }
+        candidates.append(contentsOf: meeting.minutes.decisions)
+        candidates.append(contentsOf: meeting.minutes.actionItems.map(\.task))
+        candidates.append(contentsOf: meeting.minutes.openQuestions)
+
+        var map: [String: MinutesTimestampMatcher.Match] = [:]
+        map.reserveCapacity(candidates.count)
+        for text in candidates where map[text] == nil {
+            if let match = MinutesTimestampMatcher.resolve(for: text, segments: segments) {
+                map[text] = match
+            }
+        }
+        citationCache = map
     }
 
     @ViewBuilder
     private func citedBulletRow(text: String, bulletColor: Color, textColor: Color) -> some View {
-        let citation = onJumpToTimestamp != nil
-            ? MinutesTimestampMatcher.resolve(for: text, segments: meeting.segments)
-            : nil
+        let citation = onJumpToTimestamp != nil ? citationCache[text] : nil
         HStack(alignment: .top, spacing: 8) {
             Text("•")
                 .foregroundStyle(bulletColor)

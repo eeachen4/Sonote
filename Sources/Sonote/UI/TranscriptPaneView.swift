@@ -225,8 +225,8 @@ struct TranscriptPaneView: View {
 
             // Bottom Minimal Audio Waveform + Controls Dock (EXACTLY Screenshot 1)
             VStack(spacing: 20) {
-                DoubaoDottedWaveformView(
-                    level: max(appState.systemAudioLevel, appState.micAudioLevel),
+                MeteredDottedWaveformView(
+                    meters: appState.audioMeters,
                     isActive: appState.systemAudioActive || appState.micAudioActive,
                     isPaused: appState.isPaused
                 )

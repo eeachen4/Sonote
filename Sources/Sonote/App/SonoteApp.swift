@@ -72,6 +72,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        AppState.shared.flushPendingPersistence()
         GlobalHotKeyService.shared.unregisterAll()
     }
 

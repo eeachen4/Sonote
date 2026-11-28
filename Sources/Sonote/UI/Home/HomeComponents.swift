@@ -225,10 +225,23 @@ struct HomeMeetingRow: View {
         return L("未识别到文字内容", "No transcript content")
     }
 
-    private func shortTime(_ date: Date) -> String {
+    private static let todayTimeFormatter: DateFormatter = {
         let df = DateFormatter()
-        df.dateFormat = Calendar.current.isDateInToday(date) ? "HH:mm" : "MM-dd HH:mm"
-        return df.string(from: date)
+        df.dateFormat = "HH:mm"
+        return df
+    }()
+
+    private static let monthDayTimeFormatter: DateFormatter = {
+        let df = DateFormatter()
+        df.dateFormat = "MM-dd HH:mm"
+        return df
+    }()
+
+    private func shortTime(_ date: Date) -> String {
+        if Calendar.current.isDateInToday(date) {
+            return Self.todayTimeFormatter.string(from: date)
+        }
+        return Self.monthDayTimeFormatter.string(from: date)
     }
 }
 

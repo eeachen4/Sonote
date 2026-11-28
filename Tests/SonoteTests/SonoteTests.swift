@@ -1542,6 +1542,63 @@ final class SonoteTests: XCTestCase {
         XCTAssertEqual(decodedSettings.customAskAIPrompts, [])
     }
 
+    func testRecordingClockPauseResumeAndAsyncStoreIndexPersistence() throws {
+        // 1. Pause-aware RecordingClock excludes pause windows accurately
+        let clock = RecordingClock()
+        let t0 = Date(timeIntervalSince1970: 1_764_300_000)
+        clock.start(at: t0)
+        XCTAssertEqual(clock.elapsed(at: t0.addingTimeInterval(30)), 30, accuracy: 0.001)
+
+        // Pause at t+30 for 600s (10 minutes), then resume at t+630
+        clock.pause(at: t0.addingTimeInterval(30))
+        XCTAssertEqual(clock.elapsed(at: t0.addingTimeInterval(400)), 30, accuracy: 0.001)
+        clock.resume(at: t0.addingTimeInterval(630))
+        XCTAssertEqual(clock.elapsed(at: t0.addingTimeInterval(650)), 50, accuracy: 0.001)
+
+        // Second pause cycle
+        clock.pause(at: t0.addingTimeInterval(650))
+        clock.pause(at: t0.addingTimeInterval(700)) // idempotent double pause
+        clock.resume(at: t0.addingTimeInterval(750))
+        XCTAssertEqual(clock.elapsed(at: t0.addingTimeInterval(765)), 65, accuracy: 0.001)
+        clock.reset()
+        XCTAssertEqual(clock.elapsed(at: t0.addingTimeInterval(800)), 0, accuracy: 0.001)
+
+        // 2. Async MeetingStore persistence + O(1) index-based interrupted detection
+        let tmpDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("sonote-async-store-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: tmpDir) }
+        let store = MeetingStore(baseDirectory: tmpDir)
+
+        let completed = MeetingSession(
+            title: "已结束会议",
+            duration: 300,
+            status: .completed,
+            segments: [TranscriptSegment(timestamp: 10, speaker: .me, text: "正常结束")]
+        )
+        let crashed = MeetingSession(
+            title: "异常中断会议",
+            duration: 120,
+            status: .recording,
+            segments: [TranscriptSegment(timestamp: 45, speaker: .remote, text: "中途断电测试")]
+        )
+
+        store.saveMeetingAsync(completed)
+        store.saveMeetingAsync(crashed)
+        store.flushPendingWrites()
+
+        let index = store.loadMeetingIndex()
+        XCTAssertEqual(index.count, 2)
+        XCTAssertEqual(index.first(where: { $0.id == crashed.id })?.status, .recording)
+        XCTAssertEqual(index.first(where: { $0.id == completed.id })?.status, .completed)
+
+        // O(1) fast path via index detects only the crashed meeting
+        XCTAssertEqual(store.detectInterruptedMeetingIDs(), [crashed.id])
+
+        // After loadMeetings normalizes status and rewrites index, no interrupted meetings remain
+        _ = store.loadMeetings()
+        XCTAssertEqual(store.detectInterruptedMeetingIDs(), [])
+    }
+
     func testLiveEnvironmentAndGPTIntegration() async throws {
         guard ProcessInfo.processInfo.environment["SONOTE_LIVE_VERIFY"] == "1" else {
             throw XCTSkip("Set SONOTE_LIVE_VERIFY=1 to run live macOS & GPT integration verification.")

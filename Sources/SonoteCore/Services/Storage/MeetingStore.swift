@@ -31,6 +31,7 @@ public struct MeetingIndexEntry: Identifiable, Codable, Equatable, Sendable {
     public var totalTokens: Int
     public var searchableText: String
     public var isPinned: Bool
+    public var status: MeetingStatus
 
     public init(from session: MeetingSession) {
         self.id = session.id
@@ -48,6 +49,7 @@ public struct MeetingIndexEntry: Identifiable, Codable, Equatable, Sendable {
         self.openActionItemCount = session.minutes.actionItems.filter { !$0.isCompleted }.count
         self.totalTokens = session.tokenUsage.totalTokens
         self.isPinned = session.isPinned
+        self.status = session.status
 
         // Compact lowercased index string for fast offline search across hundreds of meetings
         var parts: [String] = [session.title, session.sourceAppName, session.minutes.overview]
@@ -73,6 +75,7 @@ public struct MeetingIndexEntry: Identifiable, Codable, Equatable, Sendable {
         totalTokens = try c.decodeIfPresent(Int.self, forKey: .totalTokens) ?? 0
         searchableText = try c.decodeIfPresent(String.self, forKey: .searchableText) ?? ""
         isPinned = try c.decodeIfPresent(Bool.self, forKey: .isPinned) ?? false
+        status = try c.decodeIfPresent(MeetingStatus.self, forKey: .status) ?? .completed
     }
 
     /// Creates a lightweight placeholder session from index metadata for instant Home startup
@@ -104,11 +107,26 @@ public final class MeetingStore: @unchecked Sendable {
     public let tokenLedgerURL: URL
     public let meetingsIndexURL: URL
 
-    private let encoder: JSONEncoder
-    private let decoder: JSONDecoder
+    private let ioQueue = DispatchQueue(label: "com.sonote.meeting-store-io", qos: .utility)
     private let indexLock = NSLock()
+    private var cachedIndexEntries: [MeetingIndexEntry]?
 
     private static let migrationLock = NSLock()
+
+    /// Thread-safe per-call JSONEncoder (avoids sharing mutable encoder state across threads).
+    private static func makeEncoder() -> JSONEncoder {
+        let enc = JSONEncoder()
+        enc.outputFormatting = [.prettyPrinted, .sortedKeys]
+        enc.dateEncodingStrategy = .iso8601
+        return enc
+    }
+
+    /// Thread-safe per-call JSONDecoder.
+    private static func makeDecoder() -> JSONDecoder {
+        let dec = JSONDecoder()
+        dec.dateDecodingStrategy = .iso8601
+        return dec
+    }
 
     /// Resolves `~/Library/Application Support/Sonote` and transparently performs a one-time,
     /// non-destructive migration from legacy `~/Library/Application Support/TTMinutes` if present.
@@ -180,15 +198,6 @@ public final class MeetingStore: @unchecked Sendable {
         self.tokenLedgerURL = self.baseDirectory.appendingPathComponent("token_ledger.json")
         self.meetingsIndexURL = self.baseDirectory.appendingPathComponent("meetings_index.json")
 
-        let enc = JSONEncoder()
-        enc.outputFormatting = [.prettyPrinted, .sortedKeys]
-        enc.dateEncodingStrategy = .iso8601
-        self.encoder = enc
-
-        let dec = JSONDecoder()
-        dec.dateDecodingStrategy = .iso8601
-        self.decoder = dec
-
         ensureDirectories()
     }
 
@@ -210,9 +219,11 @@ public final class MeetingStore: @unchecked Sendable {
     private static let keychainWebhookSecretAccount = "webhook_signing_secret"
 
     public func loadSettings() -> AppSettings {
+        let dec = Self.makeDecoder()
+        let enc = Self.makeEncoder()
         var settings: AppSettings
         if let data = try? Data(contentsOf: settingsURL),
-           let loaded = try? decoder.decode(AppSettings.self, from: data) {
+           let loaded = try? dec.decode(AppSettings.self, from: data) {
             settings = loaded
         } else {
             settings = AppSettings()
@@ -238,15 +249,8 @@ public final class MeetingStore: @unchecked Sendable {
         hydrateKey(&settings.webhookSecret, account: Self.keychainWebhookSecretAccount)
 
         if needsDiskSanitize {
-            var sanitized = settings
-            sanitized.apiKey = ""
-            sanitized.deepSeekAPIKey = ""
-            sanitized.qwenAPIKey = ""
-            sanitized.domesticAPIKey = ""
-            sanitized.claudeAPIKey = ""
-            sanitized.geminiAPIKey = ""
-            sanitized.webhookSecret = ""
-            if let cleanData = try? encoder.encode(sanitized) {
+            let sanitized = Self.strippingSecrets(from: settings)
+            if let cleanData = try? enc.encode(sanitized) {
                 try? cleanData.write(to: settingsURL, options: .atomic)
             }
         }
@@ -262,16 +266,7 @@ public final class MeetingStore: @unchecked Sendable {
         return settings
     }
 
-    public func saveSettings(_ settings: AppSettings) {
-        ensureDirectories()
-        // Keep all provider API keys & webhook secrets in macOS Keychain, never write raw keys to settings.json on disk
-        _ = KeychainStore.shared.save(settings.apiKey, account: Self.keychainAPIKeyAccount)
-        _ = KeychainStore.shared.save(settings.deepSeekAPIKey, account: Self.keychainDeepSeekKeyAccount)
-        _ = KeychainStore.shared.save(settings.qwenAPIKey, account: Self.keychainQwenKeyAccount)
-        _ = KeychainStore.shared.save(settings.domesticAPIKey, account: Self.keychainDomesticKeyAccount)
-        _ = KeychainStore.shared.save(settings.claudeAPIKey, account: Self.keychainClaudeKeyAccount)
-        _ = KeychainStore.shared.save(settings.geminiAPIKey, account: Self.keychainGeminiKeyAccount)
-        _ = KeychainStore.shared.save(settings.webhookSecret, account: Self.keychainWebhookSecretAccount)
+    private static func strippingSecrets(from settings: AppSettings) -> AppSettings {
         var diskSafe = settings
         diskSafe.apiKey = ""
         diskSafe.deepSeekAPIKey = ""
@@ -280,9 +275,63 @@ public final class MeetingStore: @unchecked Sendable {
         diskSafe.claudeAPIKey = ""
         diskSafe.geminiAPIKey = ""
         diskSafe.webhookSecret = ""
-        if let data = try? encoder.encode(diskSafe) {
-            try? data.write(to: settingsURL, options: .atomic)
+        return diskSafe
+    }
+
+    /// Saves only Keychain secrets that actually changed compared to `previous` (or all if `previous == nil`).
+    public func saveChangedSecrets(_ settings: AppSettings, previous: AppSettings? = nil) {
+        if previous == nil || settings.apiKey != previous?.apiKey {
+            _ = KeychainStore.shared.save(settings.apiKey, account: Self.keychainAPIKeyAccount)
         }
+        if previous == nil || settings.deepSeekAPIKey != previous?.deepSeekAPIKey {
+            _ = KeychainStore.shared.save(settings.deepSeekAPIKey, account: Self.keychainDeepSeekKeyAccount)
+        }
+        if previous == nil || settings.qwenAPIKey != previous?.qwenAPIKey {
+            _ = KeychainStore.shared.save(settings.qwenAPIKey, account: Self.keychainQwenKeyAccount)
+        }
+        if previous == nil || settings.domesticAPIKey != previous?.domesticAPIKey {
+            _ = KeychainStore.shared.save(settings.domesticAPIKey, account: Self.keychainDomesticKeyAccount)
+        }
+        if previous == nil || settings.claudeAPIKey != previous?.claudeAPIKey {
+            _ = KeychainStore.shared.save(settings.claudeAPIKey, account: Self.keychainClaudeKeyAccount)
+        }
+        if previous == nil || settings.geminiAPIKey != previous?.geminiAPIKey {
+            _ = KeychainStore.shared.save(settings.geminiAPIKey, account: Self.keychainGeminiKeyAccount)
+        }
+        if previous == nil || settings.webhookSecret != previous?.webhookSecret {
+            _ = KeychainStore.shared.save(settings.webhookSecret, account: Self.keychainWebhookSecretAccount)
+        }
+    }
+
+    public func saveSettings(_ settings: AppSettings, previous: AppSettings? = nil) {
+        ensureDirectories()
+        saveChangedSecrets(settings, previous: previous)
+        let diskSafe = Self.strippingSecrets(from: settings)
+        let url = settingsURL
+        ioQueue.sync {
+            let enc = Self.makeEncoder()
+            if let data = try? enc.encode(diskSafe) {
+                try? data.write(to: url, options: .atomic)
+            }
+        }
+    }
+
+    /// Writes sanitized `settings.json` asynchronously on the serial I/O queue (never blocks `@MainActor`).
+    public func saveSettingsJSONAsync(_ settings: AppSettings) {
+        let diskSafe = Self.strippingSecrets(from: settings)
+        let url = settingsURL
+        ioQueue.async { [weak self] in
+            self?.ensureDirectories()
+            let enc = Self.makeEncoder()
+            if let data = try? enc.encode(diskSafe) {
+                try? data.write(to: url, options: .atomic)
+            }
+        }
+    }
+
+    /// Blocks until all queued asynchronous disk writes finish (called on app quit and before backup export).
+    public func flushPendingWrites() {
+        ioQueue.sync {}
     }
 
     // MARK: - Meetings Persistence
@@ -293,8 +342,34 @@ public final class MeetingStore: @unchecked Sendable {
     }
 
     /// Detects meetings left in `.recording` or `.paused` state from an abnormal termination (crash/power loss).
+    /// Uses `meetings_index.json` for O(1) startup checks when available; only scans directory if index is missing.
     public func detectInterruptedMeetingIDs() -> [UUID] {
         ensureDirectories()
+        let dec = Self.makeDecoder()
+
+        // O(1) fast path via meetings_index.json
+        indexLock.lock()
+        let indexData = try? Data(contentsOf: meetingsIndexURL)
+        indexLock.unlock()
+
+        if let indexData,
+           let entries = try? dec.decode([MeetingIndexEntry].self, from: indexData) {
+            let suspects = entries.filter { $0.status == .recording || $0.status == .paused }
+            guard !suspects.isEmpty else { return [] }
+            var verified: [(id: UUID, startedAt: Date)] = []
+            for entry in suspects {
+                let url = meetingsDirectory.appendingPathComponent("\(entry.id.uuidString).json")
+                guard let data = try? Data(contentsOf: url),
+                      let session = try? dec.decode(MeetingSession.self, from: data),
+                      (session.status == .recording || session.status == .paused) else { continue }
+                if Self.sessionHasRecoverableData(session) {
+                    verified.append((session.id, session.startedAt))
+                }
+            }
+            return verified.sorted { $0.startedAt > $1.startedAt }.map(\.id)
+        }
+
+        // Fallback when meetings_index.json does not exist yet
         guard let urls = try? FileManager.default.contentsOfDirectory(
             at: meetingsDirectory,
             includingPropertiesForKeys: nil,
@@ -305,21 +380,24 @@ public final class MeetingStore: @unchecked Sendable {
         var interrupted: [(id: UUID, startedAt: Date)] = []
         for url in urls where url.pathExtension.lowercased() == "json" {
             guard let data = try? Data(contentsOf: url),
-                  let session = try? decoder.decode(MeetingSession.self, from: data) else { continue }
-            if session.status == .recording || session.status == .paused {
-                let hasData = !session.segments.isEmpty
-                    || !session.manualNotes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                    || (session.audioFilePath != nil && FileManager.default.fileExists(atPath: session.audioFilePath!))
-                if hasData {
-                    interrupted.append((session.id, session.startedAt))
-                }
+                  let session = try? dec.decode(MeetingSession.self, from: data) else { continue }
+            if (session.status == .recording || session.status == .paused) && Self.sessionHasRecoverableData(session) {
+                interrupted.append((session.id, session.startedAt))
             }
         }
         return interrupted.sorted { $0.startedAt > $1.startedAt }.map(\.id)
     }
 
+    private static func sessionHasRecoverableData(_ session: MeetingSession) -> Bool {
+        !session.segments.isEmpty
+            || !session.manualNotes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || (session.audioFilePath != nil && FileManager.default.fileExists(atPath: session.audioFilePath!))
+    }
+
     public func loadMeetings() -> [MeetingSession] {
         ensureDirectories()
+        let dec = Self.makeDecoder()
+        let enc = Self.makeEncoder()
         guard let urls = try? FileManager.default.contentsOfDirectory(
             at: meetingsDirectory,
             includingPropertiesForKeys: nil,
@@ -331,11 +409,11 @@ public final class MeetingStore: @unchecked Sendable {
         var sessions: [MeetingSession] = []
         for url in urls where url.pathExtension.lowercased() == "json" {
             guard let data = try? Data(contentsOf: url) else { continue }
-            if var session = try? decoder.decode(MeetingSession.self, from: data) {
+            if var session = try? dec.decode(MeetingSession.self, from: data) {
                 // If app crashed mid-recording previously, mark cleanly as completed and persist once
                 if session.status == .recording || session.status == .paused || session.status == .summarizing {
                     session.status = .completed
-                    if let fixed = try? encoder.encode(session) {
+                    if let fixed = try? enc.encode(session) {
                         try? fixed.write(to: url, options: .atomic)
                     }
                 }
@@ -349,9 +427,10 @@ public final class MeetingStore: @unchecked Sendable {
 
     /// Loads a single full `MeetingSession` by UUID on demand (O(1) file read).
     public func loadMeeting(id: UUID) -> MeetingSession? {
+        let dec = Self.makeDecoder()
         let url = meetingsDirectory.appendingPathComponent("\(id.uuidString).json")
         guard let data = try? Data(contentsOf: url),
-              var session = try? decoder.decode(MeetingSession.self, from: data) else {
+              var session = try? dec.decode(MeetingSession.self, from: data) else {
             return nil
         }
         if session.status == .recording || session.status == .paused || session.status == .summarizing {
@@ -365,12 +444,21 @@ public final class MeetingStore: @unchecked Sendable {
     public func loadMeetingIndex() -> [MeetingIndexEntry] {
         ensureDirectories()
         indexLock.lock()
+        if let cached = cachedIndexEntries {
+            indexLock.unlock()
+            return cached
+        }
         let cachedData = try? Data(contentsOf: meetingsIndexURL)
         indexLock.unlock()
 
+        let dec = Self.makeDecoder()
         if let cachedData,
-           let entries = try? decoder.decode([MeetingIndexEntry].self, from: cachedData) {
-            return entries.sorted { $0.startedAt > $1.startedAt }
+           let entries = try? dec.decode([MeetingIndexEntry].self, from: cachedData) {
+            let sorted = entries.sorted { $0.startedAt > $1.startedAt }
+            indexLock.lock()
+            cachedIndexEntries = sorted
+            indexLock.unlock()
+            return sorted
         }
         return rebuildMeetingIndex()
     }
@@ -393,20 +481,28 @@ public final class MeetingStore: @unchecked Sendable {
     }
 
     private func writeIndexEntries(_ entries: [MeetingIndexEntry]) {
+        let enc = Self.makeEncoder()
         indexLock.lock()
         defer { indexLock.unlock() }
         let sorted = entries.sorted { $0.startedAt > $1.startedAt }
-        if let data = try? encoder.encode(sorted) {
+        cachedIndexEntries = sorted
+        if let data = try? enc.encode(sorted) {
             try? data.write(to: meetingsIndexURL, options: .atomic)
         }
     }
 
     private func upsertIndexEntry(for meeting: MeetingSession) {
+        let enc = Self.makeEncoder()
+        let dec = Self.makeDecoder()
         indexLock.lock()
-        var entries: [MeetingIndexEntry] = []
-        if let data = try? Data(contentsOf: meetingsIndexURL),
-           let decoded = try? decoder.decode([MeetingIndexEntry].self, from: data) {
+        var entries: [MeetingIndexEntry]
+        if let cached = cachedIndexEntries {
+            entries = cached
+        } else if let data = try? Data(contentsOf: meetingsIndexURL),
+                  let decoded = try? dec.decode([MeetingIndexEntry].self, from: data) {
             entries = decoded
+        } else {
+            entries = []
         }
         let entry = MeetingIndexEntry(from: meeting)
         if let idx = entries.firstIndex(where: { $0.id == meeting.id }) {
@@ -415,40 +511,65 @@ public final class MeetingStore: @unchecked Sendable {
             entries.insert(entry, at: 0)
         }
         entries.sort { $0.startedAt > $1.startedAt }
-        if let data = try? encoder.encode(entries) {
+        cachedIndexEntries = entries
+        if let data = try? enc.encode(entries) {
             try? data.write(to: meetingsIndexURL, options: .atomic)
         }
         indexLock.unlock()
     }
 
     private func removeIndexEntry(id: UUID) {
+        let enc = Self.makeEncoder()
+        let dec = Self.makeDecoder()
         indexLock.lock()
         defer { indexLock.unlock() }
-        guard let data = try? Data(contentsOf: meetingsIndexURL),
-              var entries = try? decoder.decode([MeetingIndexEntry].self, from: data) else {
+        var entries: [MeetingIndexEntry]
+        if let cached = cachedIndexEntries {
+            entries = cached
+        } else if let data = try? Data(contentsOf: meetingsIndexURL),
+                  let decoded = try? dec.decode([MeetingIndexEntry].self, from: data) {
+            entries = decoded
+        } else {
             return
         }
         entries.removeAll { $0.id == id }
-        if let encoded = try? encoder.encode(entries) {
+        cachedIndexEntries = entries
+        if let encoded = try? enc.encode(entries) {
             try? encoded.write(to: meetingsIndexURL, options: .atomic)
         }
     }
 
     public func saveMeeting(_ meeting: MeetingSession) {
+        ioQueue.sync {
+            writeMeetingLocked(meeting)
+        }
+    }
+
+    /// Persists meeting JSON and updates the in-memory + on-disk index asynchronously on the serial I/O queue.
+    public func saveMeetingAsync(_ meeting: MeetingSession) {
+        ioQueue.async { [weak self] in
+            self?.writeMeetingLocked(meeting)
+        }
+    }
+
+    private func writeMeetingLocked(_ meeting: MeetingSession) {
         ensureDirectories()
+        let enc = Self.makeEncoder()
         let url = meetingsDirectory.appendingPathComponent("\(meeting.id.uuidString).json")
-        if let data = try? encoder.encode(meeting) {
+        if let data = try? enc.encode(meeting) {
             try? data.write(to: url, options: .atomic)
         }
         upsertIndexEntry(for: meeting)
     }
 
     public func deleteMeeting(_ meeting: MeetingSession) {
-        let jsonURL = meetingsDirectory.appendingPathComponent("\(meeting.id.uuidString).json")
-        try? FileManager.default.removeItem(at: jsonURL)
-        removeIndexEntry(id: meeting.id)
-        if let audioPath = meeting.audioFilePath {
-            try? FileManager.default.removeItem(atPath: audioPath)
+        ioQueue.sync {
+            let jsonURL = meetingsDirectory.appendingPathComponent("\(meeting.id.uuidString).json")
+            try? FileManager.default.removeItem(at: jsonURL)
+            removeIndexEntry(id: meeting.id)
+            if let audioPath = meeting.audioFilePath {
+                try? FileManager.default.removeItem(atPath: audioPath)
+            }
         }
     }
 
@@ -461,8 +582,9 @@ public final class MeetingStore: @unchecked Sendable {
 
     public func loadTokenLedger(seedFrom meetings: [MeetingSession]? = nil) -> [String: TokenUsage] {
         ensureDirectories()
+        let dec = Self.makeDecoder()
         if let data = try? Data(contentsOf: tokenLedgerURL),
-           let ledger = try? decoder.decode([String: TokenUsage].self, from: data) {
+           let ledger = try? dec.decode([String: TokenUsage].self, from: data) {
             return ledger
         }
         // First-time migration: seed ledger from existing meetings grouped by startedAt date
@@ -483,7 +605,8 @@ public final class MeetingStore: @unchecked Sendable {
 
     public func saveTokenLedger(_ ledger: [String: TokenUsage]) {
         ensureDirectories()
-        if let data = try? encoder.encode(ledger) {
+        let enc = Self.makeEncoder()
+        if let data = try? enc.encode(ledger) {
             try? data.write(to: tokenLedgerURL, options: .atomic)
         }
     }

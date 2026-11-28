@@ -129,8 +129,12 @@ public final class DualAudioCaptureManager: @unchecked Sendable {
         if mode.capturesSystem {
             systemCapture.onAudioBuffer = { [weak self] buffer, level in
                 self?.onSystemBuffer?(buffer, level)
-                let mono = WAVEncoder.extractMono16kSamples(from: buffer)
-                self?.mixer.pushSystem(mono)
+                guard let self, let copied = Self.copyPCMBuffer(buffer) else { return }
+                self.backupQueue.async { [weak self] in
+                    guard let self, self.backupAudioFile != nil else { return }
+                    let mono = WAVEncoder.extractMono16kSamples(from: copied)
+                    self.mixer.pushSystem(mono)
+                }
             }
             systemCapture.onRouteChanged = { [weak self] notice in
                 self?.onDeviceRouteChanged?(notice)
@@ -146,8 +150,12 @@ public final class DualAudioCaptureManager: @unchecked Sendable {
         if mode.capturesMic {
             micCapture.onAudioBuffer = { [weak self] buffer, level in
                 self?.onMicBuffer?(buffer, level)
-                let mono = WAVEncoder.extractMono16kSamples(from: buffer)
-                self?.mixer.pushMic(mono)
+                guard let self, let copied = Self.copyPCMBuffer(buffer) else { return }
+                self.backupQueue.async { [weak self] in
+                    guard let self, self.backupAudioFile != nil else { return }
+                    let mono = WAVEncoder.extractMono16kSamples(from: copied)
+                    self.mixer.pushMic(mono)
+                }
             }
             micCapture.onRouteChanged = { [weak self] notice in
                 self?.onDeviceRouteChanged?(notice)
@@ -252,5 +260,38 @@ public final class DualAudioCaptureManager: @unchecked Sendable {
             }
             try? file.write(from: outBuf)
         }
+    }
+
+    /// Lightweight PCM buffer copy so resampling & mixer locking run off the real-time audio callback thread.
+    private static func copyPCMBuffer(_ source: AVAudioPCMBuffer) -> AVAudioPCMBuffer? {
+        let frames = source.frameLength
+        guard frames > 0, let copy = AVAudioPCMBuffer(pcmFormat: source.format, frameCapacity: frames) else {
+            return nil
+        }
+        copy.frameLength = frames
+        let channelCount = Int(source.format.channelCount)
+        if let srcFloat = source.floatChannelData, let dstFloat = copy.floatChannelData {
+            let bytes = Int(frames) * MemoryLayout<Float>.size
+            if source.format.isInterleaved {
+                memcpy(dstFloat[0], srcFloat[0], bytes * channelCount)
+            } else {
+                for ch in 0..<channelCount {
+                    memcpy(dstFloat[ch], srcFloat[ch], bytes)
+                }
+            }
+            return copy
+        }
+        if let srcInt16 = source.int16ChannelData, let dstInt16 = copy.int16ChannelData {
+            let bytes = Int(frames) * MemoryLayout<Int16>.size
+            if source.format.isInterleaved {
+                memcpy(dstInt16[0], srcInt16[0], bytes * channelCount)
+            } else {
+                for ch in 0..<channelCount {
+                    memcpy(dstInt16[ch], srcInt16[ch], bytes)
+                }
+            }
+            return copy
+        }
+        return nil
     }
 }
