@@ -61,6 +61,51 @@ extension CompletedMeetingDocumentView {
                     .background(Capsule().fill(AppTheme.inputBackground))
                     .overlay(Capsule().strokeBorder(AppTheme.inputBorder, lineWidth: 1))
 
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.14)) {
+                            showFindReplaceBar.toggle()
+                        }
+                    } label: {
+                        HStack(spacing: 3.5) {
+                            Image(systemName: "arrow.left.arrow.right")
+                                .font(.system(size: 10))
+                            Text(L("替换", "Replace"))
+                                .font(.system(size: 11, weight: .medium))
+                        }
+                        .foregroundStyle(showFindReplaceBar ? AppTheme.brandPrimary : AppTheme.textSecondary)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 5)
+                        .background(Capsule().fill(showFindReplaceBar ? AppTheme.brandSoftFill : AppTheme.softCardBg))
+                        .overlay(Capsule().strokeBorder(showFindReplaceBar ? Color.clear : AppTheme.subtleBorder, lineWidth: 1))
+                        .contentShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .help(L("全文查找并批量替换错别字", "Find and replace text across the entire transcript"))
+
+                    if meeting.segments.count > 1 {
+                        Button {
+                            let merged = appState.mergeAdjacentTranscriptSegments(meetingID: meeting.id)
+                            showToast(merged > 0
+                                      ? L("已合并 \(merged) 条相邻短句", "Merged \(merged) lines")
+                                      : L("暂无可合并的相邻同人短句", "No adjacent lines to merge"))
+                        } label: {
+                            HStack(spacing: 3.5) {
+                                Image(systemName: "text.alignleft")
+                                    .font(.system(size: 10))
+                                Text(L("合并碎句", "Merge"))
+                                    .font(.system(size: 11, weight: .medium))
+                            }
+                            .foregroundStyle(AppTheme.textSecondary)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 5)
+                            .background(Capsule().fill(AppTheme.softCardBg))
+                            .overlay(Capsule().strokeBorder(AppTheme.subtleBorder, lineWidth: 1))
+                            .contentShape(Capsule())
+                        }
+                        .buttonStyle(.plain)
+                        .help(L("合并同一说话人连续 12 秒内的碎片短句", "Merge consecutive short segments by the same speaker"))
+                    }
+
                     Spacer()
 
                     if hasGenericSpeakers {
@@ -152,6 +197,33 @@ extension CompletedMeetingDocumentView {
                         .disabled(appState.isDiarizing)
                         .help(L("通过 Sortformer 分离多说话人，并自动匹配本地 ECAPA 声纹库", "Separate speakers via Sortformer and match local ECAPA voiceprints"))
                     }
+                }
+
+                if showFindReplaceBar {
+                    HStack(spacing: 8) {
+                        CleanInputBox(
+                            placeholder: L("查找词（同步上方搜索框）...", "Find text..."),
+                            text: $transcriptSearchQuery
+                        )
+                        Image(systemName: "arrow.right")
+                            .font(.system(size: 10.5))
+                            .foregroundStyle(AppTheme.textMuted)
+                        CleanInputBox(
+                            placeholder: L("替换为...", "Replace with..."),
+                            text: $replaceWithDraft
+                        ) {
+                            runTranscriptBulkReplace()
+                        }
+                        CleanPrimaryButton(
+                            title: L("全部替换", "Replace All"),
+                            disabled: transcriptSearchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                        ) {
+                            runTranscriptBulkReplace()
+                        }
+                    }
+                    .padding(10)
+                    .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(AppTheme.softCardBg))
+                    .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(AppTheme.subtleBorder, lineWidth: 1))
                 }
 
                 Text(hasAudioFile
@@ -399,6 +471,32 @@ extension CompletedMeetingDocumentView {
             list.append(att)
         }
         return list
+    }
+
+    func runTranscriptBulkReplace() {
+        let find = transcriptSearchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        let replacement = replaceWithDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !find.isEmpty else { return }
+        let count = appState.replaceInTranscript(meetingID: meeting.id, find: find, replaceWith: replaceWithDraft)
+        if count > 0 {
+            showToast(L("已替换 \(count) 处", "Replaced \(count)"))
+            if !replacement.isEmpty {
+                let candidates = GlossarySuggestionExtractor.extractCandidateTerms(
+                    original: find,
+                    edited: replacement,
+                    existingGlossary: appState.settings.glossaryTerms
+                )
+                if !candidates.isEmpty {
+                    withAnimation(.easeInOut(duration: 0.16)) {
+                        glossarySuggestions = candidates
+                    }
+                }
+            }
+            transcriptSearchQuery = ""
+            replaceWithDraft = ""
+        } else {
+            showToast(L("未找到匹配文本", "No matches found"))
+        }
     }
 
     func saveEditedSegment(_ seg: TranscriptSegment) {

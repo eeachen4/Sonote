@@ -100,6 +100,8 @@ struct CompletedMeetingDocumentView: View {
     @State var glossarySuggestions: [String] = []
     @State var pendingScrollSegmentID: UUID? = nil
     @State var showRetranscribeDialog: Bool = false
+    @State var showFindReplaceBar: Bool = false
+    @State var replaceWithDraft: String = ""
     @FocusState var isComposerFocused: Bool
     @FocusState var isTranscriptSearchFocused: Bool
 

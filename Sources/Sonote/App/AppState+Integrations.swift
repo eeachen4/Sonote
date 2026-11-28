@@ -309,6 +309,30 @@ extension AppState {
         settings.customAskAIPrompts.removeAll { $0 == prompt }
     }
 
+    @discardableResult
+    public func replaceInTranscript(meetingID: UUID, find: String, replaceWith: String) -> Int {
+        var count = 0
+        updateMeeting(id: meetingID) { m in
+            count = m.replaceInTranscript(find: find, replaceWith: replaceWith)
+        }
+        if count > 0 {
+            statusBannerMessage = L("已替换 \(count) 处「\(find)」→「\(replaceWith)」", "Replaced \(count) occurrence(s)")
+        }
+        return count
+    }
+
+    @discardableResult
+    public func mergeAdjacentTranscriptSegments(meetingID: UUID) -> Int {
+        var merged = 0
+        updateMeeting(id: meetingID) { m in
+            merged = m.mergeAdjacentSameSpeakerSegments()
+        }
+        if merged > 0 {
+            statusBannerMessage = L("已合并 \(merged) 条相邻同人短句", "Merged \(merged) adjacent segment(s)")
+        }
+        return merged
+    }
+
     // MARK: - Webhook Push, Backup Archive & On-Device MLX Controls
 
     public func pushMeetingToWebhook(_ meeting: MeetingSession) async -> (success: Bool, message: String) {

@@ -1600,6 +1600,30 @@ final class SonoteTests: XCTestCase {
         XCTAssertEqual(store.detectInterruptedMeetingIDs(), [])
     }
 
+    func testTranscriptFindReplaceAndMergeAdjacentSegments() {
+        var session = MeetingSession(
+            title: "逐字稿整理测试",
+            segments: [
+                TranscriptSegment(timestamp: 5, speaker: .remote, speakerLabel: "Alex", text: "新奇科技今年发布新品", isStarred: false),
+                TranscriptSegment(timestamp: 11, speaker: .remote, speakerLabel: "Alex", text: "新奇科技重点投入端侧 AI", isStarred: true),
+                TranscriptSegment(timestamp: 30, speaker: .remote, speakerLabel: "Alex", text: "间隔超过 12 秒不合并"),
+                TranscriptSegment(timestamp: 33, speaker: .me, speakerLabel: "我", text: "收到，记录新奇科技方案")
+            ]
+        )
+
+        let replaced = session.replaceInTranscript(find: "新奇科技", replaceWith: "星驰科技")
+        XCTAssertEqual(replaced, 3)
+        XCTAssertTrue(session.segments[0].text.contains("星驰科技"))
+        XCTAssertTrue(session.segments[3].text.contains("星驰科技"))
+
+        let merged = session.mergeAdjacentSameSpeakerSegments(maxGapSeconds: 12.0)
+        XCTAssertEqual(merged, 1)
+        XCTAssertEqual(session.segments.count, 3)
+        XCTAssertEqual(session.segments[0].timestamp, 5, accuracy: 0.01)
+        XCTAssertTrue(session.segments[0].isStarred, "Merged segment must preserve starred flag")
+        XCTAssertTrue(session.segments[0].text.contains("星驰科技今年发布新品，星驰科技重点投入端侧 AI"))
+    }
+
     func testLiveEnvironmentAndGPTIntegration() async throws {
         guard ProcessInfo.processInfo.environment["SONOTE_LIVE_VERIFY"] == "1" else {
             throw XCTSkip("Set SONOTE_LIVE_VERIFY=1 to run live macOS & GPT integration verification.")

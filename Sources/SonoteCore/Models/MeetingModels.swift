@@ -548,6 +548,79 @@ public struct MeetingSession: Identifiable, Codable, Equatable, Sendable {
         }
     }
 
+    /// Replaces all occurrences of `find` with `replaceWith` across transcript segments.
+    /// Returns the total number of replaced occurrences.
+    @discardableResult
+    public mutating func replaceInTranscript(
+        find: String,
+        replaceWith: String,
+        caseSensitive: Bool = false
+    ) -> Int {
+        let needle = find.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !needle.isEmpty, needle != replaceWith else { return 0 }
+        let options: String.CompareOptions = caseSensitive ? [] : [.caseInsensitive]
+        var totalReplaced = 0
+
+        for idx in segments.indices {
+            var text = segments[idx].text
+            var searchStart = text.startIndex
+            var countInSeg = 0
+            while searchStart < text.endIndex,
+                  let range = text.range(of: needle, options: options, range: searchStart..<text.endIndex) {
+                text.replaceSubrange(range, with: replaceWith)
+                countInSeg += 1
+                searchStart = text.index(range.lowerBound, offsetBy: replaceWith.count, limitedBy: text.endIndex) ?? text.endIndex
+            }
+            if countInSeg > 0 {
+                segments[idx].text = text
+                totalReplaced += countInSeg
+            }
+        }
+        return totalReplaced
+    }
+
+    /// Merges consecutive transcript segments spoken by the same speaker within `maxGapSeconds`.
+    /// Preserves the earliest timestamp and starred status. Returns the number of merged segments.
+    @discardableResult
+    public mutating func mergeAdjacentSameSpeakerSegments(maxGapSeconds: TimeInterval = 12.0) -> Int {
+        guard segments.count > 1 else { return 0 }
+        var merged: [TranscriptSegment] = []
+        merged.reserveCapacity(segments.count)
+        var mergedCount = 0
+
+        for seg in segments {
+            if var prev = merged.last,
+               prev.speaker == seg.speaker,
+               prev.resolvedSpeakerName == seg.resolvedSpeakerName,
+               (seg.timestamp - prev.timestamp) <= maxGapSeconds,
+               (prev.text.count + seg.text.count) <= 420 {
+                let left = prev.text.trimmingCharacters(in: .whitespacesAndNewlines)
+                let right = seg.text.trimmingCharacters(in: .whitespacesAndNewlines)
+                let joiner: String
+                if left.isEmpty || right.isEmpty {
+                    joiner = ""
+                } else if let lastScalar = left.unicodeScalars.last, (0x4E00...0x9FFF).contains(lastScalar.value) {
+                    joiner = "，"
+                } else if left.hasSuffix("。") || left.hasSuffix("，") || left.hasSuffix("！") || left.hasSuffix("？") {
+                    joiner = ""
+                } else {
+                    joiner = " "
+                }
+                prev.text = "\(left)\(joiner)\(right)"
+                prev.isStarred = prev.isStarred || seg.isStarred
+                merged[merged.count - 1] = prev
+                mergedCount += 1
+            } else {
+                merged.append(seg)
+            }
+        }
+
+        if mergedCount > 0 {
+            segments = merged
+        }
+        return mergedCount
+    }
+
     /// Full-text search across title, app source, structured minutes, manual notes, and transcript segments.
     public func matchesSearchQuery(_ rawQuery: String) -> Bool {
         let q = rawQuery.trimmingCharacters(in: .whitespacesAndNewlines)
