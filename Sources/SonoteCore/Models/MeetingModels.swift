@@ -378,6 +378,25 @@ public struct DetectedMeetingApp: Identifiable, Codable, Equatable, Sendable {
     }
 }
 
+public struct SpeakerShareStat: Identifiable, Equatable, Sendable {
+    public var id: String { speakerName }
+    public var speakerName: String
+    public var segmentCount: Int
+    public var characterCount: Int
+    public var share: Double
+
+    public init(speakerName: String, segmentCount: Int, characterCount: Int, share: Double) {
+        self.speakerName = speakerName
+        self.segmentCount = segmentCount
+        self.characterCount = characterCount
+        self.share = share
+    }
+
+    public var percentageInt: Int {
+        Int((share * 100.0).rounded())
+    }
+}
+
 public struct MeetingSession: Identifiable, Codable, Equatable, Sendable {
     public var id: UUID
     public var title: String
@@ -504,6 +523,34 @@ public struct MeetingSession: Identifiable, Codable, Equatable, Sendable {
             }
         }
         return names
+    }
+
+    /// Computes per-speaker speaking share (by character count) sorted descending.
+    public var speakerShareStats: [SpeakerShareStat] {
+        guard !segments.isEmpty else { return [] }
+        var counts: [String: (segments: Int, chars: Int)] = [:]
+        var totalChars = 0
+        for seg in segments {
+            let name = seg.resolvedSpeakerName
+            let len = max(1, seg.text.trimmingCharacters(in: .whitespacesAndNewlines).count)
+            let cur = counts[name] ?? (0, 0)
+            counts[name] = (cur.segments + 1, cur.chars + len)
+            totalChars += len
+        }
+        guard totalChars > 0 else { return [] }
+        return counts
+            .map { name, entry in
+                SpeakerShareStat(
+                    speakerName: name,
+                    segmentCount: entry.segments,
+                    characterCount: entry.chars,
+                    share: Double(entry.chars) / Double(totalChars)
+                )
+            }
+            .sorted { a, b in
+                if a.characterCount != b.characterCount { return a.characterCount > b.characterCount }
+                return a.speakerName < b.speakerName
+            }
     }
 
     /// Renames a single segment's speaker or batch-renames all segments matching `oldName`,

@@ -1622,6 +1622,12 @@ final class SonoteTests: XCTestCase {
         XCTAssertEqual(session.segments[0].timestamp, 5, accuracy: 0.01)
         XCTAssertTrue(session.segments[0].isStarred, "Merged segment must preserve starred flag")
         XCTAssertTrue(session.segments[0].text.contains("星驰科技今年发布新品，星驰科技重点投入端侧 AI"))
+
+        let stats = session.speakerShareStats
+        XCTAssertEqual(stats.count, 2)
+        XCTAssertEqual(stats[0].speakerName, "Alex")
+        XCTAssertGreaterThan(stats[0].share, 0.7)
+        XCTAssertEqual(stats.reduce(0.0) { $0 + $1.share }, 1.0, accuracy: 0.001)
     }
 
     func testLiveEnvironmentAndGPTIntegration() async throws {

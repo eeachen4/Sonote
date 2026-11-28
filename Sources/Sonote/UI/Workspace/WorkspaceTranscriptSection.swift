@@ -232,6 +232,12 @@ extension CompletedMeetingDocumentView {
                     .font(.system(size: 11.5))
                     .foregroundStyle(AppTheme.textMuted)
 
+                // Speaker Talk-Share Analytics Bar (when >= 2 speakers exist)
+                let shareStats = meeting.speakerShareStats
+                if shareStats.count > 1 {
+                    speakerTalkShareBar(stats: shareStats)
+                }
+
                 // Speaker & Star Filter Bar
                 let speakers = meeting.distinctSpeakerNames
                 let hasStarred = meeting.segments.contains(where: \.isStarred)
@@ -575,6 +581,73 @@ extension CompletedMeetingDocumentView {
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .strokeBorder(AppTheme.brandPrimary.opacity(0.24), lineWidth: 1)
         )
+    }
+
+    @ViewBuilder
+    private func speakerTalkShareBar(stats: [SpeakerShareStat]) -> some View {
+        let palette: [Color] = [
+            AppTheme.brandPrimary,
+            AppTheme.successGreen,
+            AppTheme.warningAmber,
+            Color(red: 0.56, green: 0.35, blue: 0.88),
+            Color(red: 0.88, green: 0.34, blue: 0.52),
+            AppTheme.textMuted
+        ]
+        VStack(alignment: .leading, spacing: 6) {
+            GeometryReader { geo in
+                let totalW = max(1, geo.size.width)
+                let spacing: CGFloat = 2
+                let usableW = max(1, totalW - spacing * CGFloat(max(0, stats.count - 1)))
+                HStack(spacing: spacing) {
+                    ForEach(Array(stats.enumerated()), id: \.element.id) { idx, stat in
+                        let color = palette[idx % palette.count]
+                        let isDimmed = selectedSpeakerFilter != nil && selectedSpeakerFilter != stat.speakerName
+                        Capsule()
+                            .fill(color.opacity(isDimmed ? 0.25 : 0.88))
+                            .frame(width: max(6, usableW * CGFloat(stat.share)), height: 6)
+                            .onTapGesture {
+                                withAnimation(.easeInOut(duration: 0.14)) {
+                                    selectedSpeakerFilter = (selectedSpeakerFilter == stat.speakerName) ? nil : stat.speakerName
+                                }
+                            }
+                            .help("\(stat.speakerName) · \(stat.percentageInt)% (\(stat.segmentCount))")
+                    }
+                }
+            }
+            .frame(height: 6)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 10) {
+                    ForEach(Array(stats.prefix(6).enumerated()), id: \.element.id) { idx, stat in
+                        let color = palette[idx % palette.count]
+                        let isSelected = selectedSpeakerFilter == stat.speakerName
+                        Button {
+                            withAnimation(.easeInOut(duration: 0.14)) {
+                                selectedSpeakerFilter = isSelected ? nil : stat.speakerName
+                            }
+                        } label: {
+                            HStack(spacing: 4) {
+                                Circle()
+                                    .fill(color)
+                                    .frame(width: 6, height: 6)
+                                Text(stat.speakerName)
+                                    .font(.system(size: 11, weight: isSelected ? .semibold : .regular))
+                                    .foregroundStyle(isSelected ? AppTheme.textPrimary : AppTheme.textSecondary)
+                                Text("\(stat.percentageInt)%")
+                                    .font(.system(size: 10.5, weight: .medium, design: .monospaced))
+                                    .foregroundStyle(AppTheme.textMuted)
+                            }
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+        }
+        .padding(.horizontal, 11)
+        .padding(.vertical, 8)
+        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(AppTheme.softCardBg.opacity(0.75)))
+        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(AppTheme.subtleBorder.opacity(0.7), lineWidth: 1))
     }
 
     func transcriptFilterPill(title: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
