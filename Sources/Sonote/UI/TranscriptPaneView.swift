@@ -30,6 +30,9 @@ struct TranscriptPaneView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            // Reserve top safe area outside ScrollView so live transcript never scrolls under macOS traffic lights
+            Spacer().frame(height: 36)
+
             // Subtle permission notice only if audio capture had an issue
             if isLiveSession && !appState.runtimeWarnings.isEmpty {
                 HStack(spacing: 6) {
@@ -53,7 +56,7 @@ struct TranscriptPaneView: View {
                 .background(RoundedRectangle(cornerRadius: 8).fill(AppTheme.elevatedSurface))
                 .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(AppTheme.subtleBorder))
                 .padding(.horizontal, 22)
-                .padding(.top, 38)
+                .padding(.top, 4)
             }
 
             // Clean Transcript Scroll Area
@@ -66,9 +69,9 @@ struct TranscriptPaneView: View {
                                 SkeletonPill(width: 155, height: 14, fill: AppTheme.skeletonBg, cornerRadius: 7)
                                 SkeletonPill(width: nil, height: 12, fill: AppTheme.skeletonBg, cornerRadius: 6)
                             }
-                            .padding(.top, appState.runtimeWarnings.isEmpty ? 56 : 18)
+                            .padding(.top, appState.runtimeWarnings.isEmpty ? 20 : 14)
                         } else {
-                            Spacer().frame(height: appState.runtimeWarnings.isEmpty ? 38 : 6)
+                            Spacer().frame(height: 6)
 
                             ForEach(meeting.segments) { seg in
                                 minimalSegmentRow(seg)

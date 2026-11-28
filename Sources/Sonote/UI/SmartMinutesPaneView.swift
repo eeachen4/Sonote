@@ -343,93 +343,46 @@ struct DoubaoMindMapView: View {
     }
 }
 
-// MARK: - Doubao-Style Clean Typographic Outline View (With Optional Inline Editing)
+// MARK: - Doubao-Style Clean Typographic Outline Reading View
 
 struct DoubaoOutlineMinutesView: View {
     let meeting: MeetingSession
     @ObservedObject var appState: AppState
     @ObservedObject private var theme = ThemeManager.shared
-    var isEditing: Bool = false
-
-    @State private var newActionTask: String = ""
-    @State private var newActionOwner: String = ""
-    @State private var newActionDue: String = ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             if let fallback = meeting.minutes.rawMarkdownFallback, !fallback.isEmpty {
                 MarkdownContentView(markdown: fallback, fontSize: 13.5)
             } else {
-                if !meeting.minutes.overview.isEmpty || isEditing {
+                if !meeting.minutes.overview.isEmpty {
                     outlineSection(L("摘要", "Summary")) {
-                        if isEditing {
-                            TextEditor(text: Binding(
-                                get: { meeting.minutes.overview },
-                                set: { val in appState.updateMeeting(id: meeting.id) { $0.minutes.overview = val } }
-                            ))
-                            .font(.system(size: 13))
+                        inlineMarkdownText(meeting.minutes.overview)
+                            .font(.system(size: 13.5))
                             .foregroundStyle(AppTheme.textPrimary)
-                            .scrollContentBackground(.hidden)
-                            .frame(minHeight: 68)
-                            .padding(8)
-                            .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(AppTheme.inputBackground))
-                            .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(AppTheme.inputBorder, lineWidth: 1))
-                        } else {
-                            inlineMarkdownText(meeting.minutes.overview)
-                                .font(.system(size: 13.5))
-                                .foregroundStyle(AppTheme.textPrimary)
-                                .lineSpacing(5)
-                                .textSelection(.enabled)
-                        }
+                            .lineSpacing(5)
+                            .textSelection(.enabled)
                     }
                 }
 
                 if !meeting.minutes.topics.isEmpty {
                     outlineSection(L("核心要点", "Key Topics")) {
                         VStack(alignment: .leading, spacing: 14) {
-                            ForEach(Array(meeting.minutes.topics.enumerated()), id: \.element.id) { tIdx, topic in
+                            ForEach(meeting.minutes.topics) { topic in
                                 VStack(alignment: .leading, spacing: 6) {
-                                    if isEditing {
-                                        TextField(L("议题标题", "Topic title"), text: Binding(
-                                            get: { topic.title },
-                                            set: { val in
-                                                appState.updateMeeting(id: meeting.id) { m in
-                                                    if tIdx < m.minutes.topics.count { m.minutes.topics[tIdx].title = val }
-                                                }
-                                            }
-                                        ))
-                                        .textFieldStyle(.roundedBorder)
-                                        .font(.system(size: 13, weight: .semibold))
-                                    } else {
-                                        inlineMarkdownText(topic.title)
-                                            .font(.system(size: 13.5, weight: .semibold))
-                                            .foregroundStyle(AppTheme.textPrimary)
-                                    }
+                                    inlineMarkdownText(topic.title)
+                                        .font(.system(size: 13.5, weight: .semibold))
+                                        .foregroundStyle(AppTheme.textPrimary)
 
-                                    ForEach(Array(topic.points.enumerated()), id: \.offset) { pIdx, point in
+                                    ForEach(Array(topic.points.enumerated()), id: \.offset) { _, point in
                                         HStack(alignment: .top, spacing: 8) {
                                             Text("•")
                                                 .foregroundStyle(AppTheme.textSecondary)
-                                            if isEditing {
-                                                TextField(L("要点内容", "Key point"), text: Binding(
-                                                    get: { point },
-                                                    set: { val in
-                                                        appState.updateMeeting(id: meeting.id) { m in
-                                                            if tIdx < m.minutes.topics.count && pIdx < m.minutes.topics[tIdx].points.count {
-                                                                m.minutes.topics[tIdx].points[pIdx] = val
-                                                            }
-                                                        }
-                                                    }
-                                                ))
-                                                .textFieldStyle(.roundedBorder)
-                                                .font(.system(size: 12.5))
-                                            } else {
-                                                inlineMarkdownText(point)
-                                                    .font(.system(size: 13))
-                                                    .foregroundStyle(AppTheme.textPrimary.opacity(0.9))
-                                                    .lineSpacing(4)
-                                                    .textSelection(.enabled)
-                                            }
+                                            inlineMarkdownText(point)
+                                                .font(.system(size: 13))
+                                                .foregroundStyle(AppTheme.textPrimary.opacity(0.9))
+                                                .lineSpacing(4)
+                                                .textSelection(.enabled)
                                         }
                                     }
                                 }
@@ -441,38 +394,25 @@ struct DoubaoOutlineMinutesView: View {
                 if !meeting.minutes.decisions.isEmpty {
                     outlineSection(L("会议决议", "Decisions")) {
                         VStack(alignment: .leading, spacing: 7) {
-                            ForEach(Array(meeting.minutes.decisions.enumerated()), id: \.offset) { dIdx, decision in
+                            ForEach(Array(meeting.minutes.decisions.enumerated()), id: \.offset) { _, decision in
                                 HStack(alignment: .top, spacing: 8) {
                                     Text("•")
                                         .foregroundStyle(AppTheme.brandPrimary)
-                                    if isEditing {
-                                        TextField(L("决议内容", "Decision"), text: Binding(
-                                            get: { decision },
-                                            set: { val in
-                                                appState.updateMeeting(id: meeting.id) { m in
-                                                    if dIdx < m.minutes.decisions.count { m.minutes.decisions[dIdx] = val }
-                                                }
-                                            }
-                                        ))
-                                        .textFieldStyle(.roundedBorder)
-                                        .font(.system(size: 12.5))
-                                    } else {
-                                        inlineMarkdownText(decision)
-                                            .font(.system(size: 13))
-                                            .foregroundStyle(AppTheme.textPrimary)
-                                            .lineSpacing(4)
-                                            .textSelection(.enabled)
-                                    }
+                                    inlineMarkdownText(decision)
+                                        .font(.system(size: 13))
+                                        .foregroundStyle(AppTheme.textPrimary)
+                                        .lineSpacing(4)
+                                        .textSelection(.enabled)
                                 }
                             }
                         }
                     }
                 }
 
-                if !meeting.minutes.actionItems.isEmpty || isEditing {
+                if !meeting.minutes.actionItems.isEmpty {
                     outlineSection(L("待办事项", "Action Items")) {
                         VStack(alignment: .leading, spacing: 8) {
-                            ForEach(Array(meeting.minutes.actionItems.enumerated()), id: \.element.id) { aIdx, item in
+                            ForEach(meeting.minutes.actionItems) { item in
                                 HStack(alignment: .top, spacing: 8) {
                                     Button {
                                         appState.toggleActionItem(meetingID: meeting.id, actionID: item.id)
@@ -484,103 +424,20 @@ struct DoubaoOutlineMinutesView: View {
                                     .buttonStyle(.plain)
                                     .padding(.top, 1)
 
-                                    if isEditing {
-                                        HStack(spacing: 6) {
-                                            TextField(L("待办事项", "Task"), text: Binding(
-                                                get: { item.task },
-                                                set: { val in
-                                                    appState.updateMeeting(id: meeting.id) { m in
-                                                        if aIdx < m.minutes.actionItems.count { m.minutes.actionItems[aIdx].task = val }
-                                                    }
-                                                }
-                                            ))
-                                            .textFieldStyle(.roundedBorder)
-                                            .font(.system(size: 12.5))
-
-                                            TextField(L("负责人", "Owner"), text: Binding(
-                                                get: { item.owner },
-                                                set: { val in
-                                                    appState.updateMeeting(id: meeting.id) { m in
-                                                        if aIdx < m.minutes.actionItems.count { m.minutes.actionItems[aIdx].owner = val }
-                                                    }
-                                                }
-                                            ))
-                                            .textFieldStyle(.roundedBorder)
-                                            .font(.system(size: 12))
-                                            .frame(width: 72)
-
-                                            TextField(L("截止时间", "Due"), text: Binding(
-                                                get: { item.dueDate },
-                                                set: { val in
-                                                    appState.updateMeeting(id: meeting.id) { m in
-                                                        if aIdx < m.minutes.actionItems.count { m.minutes.actionItems[aIdx].dueDate = val }
-                                                    }
-                                                }
-                                            ))
-                                            .textFieldStyle(.roundedBorder)
-                                            .font(.system(size: 12))
-                                            .frame(width: 78)
-
-                                            Button {
-                                                appState.updateMeeting(id: meeting.id) { m in
-                                                    m.minutes.actionItems.removeAll { $0.id == item.id }
-                                                }
-                                            } label: {
-                                                Image(systemName: "minus.circle")
-                                                    .foregroundStyle(AppTheme.recordingRed.opacity(0.8))
-                                            }
-                                            .buttonStyle(.plain)
-                                        }
-                                    } else {
-                                        VStack(alignment: .leading, spacing: 2) {
-                                            inlineMarkdownText(item.task)
-                                                .font(.system(size: 13))
-                                                .strikethrough(item.isCompleted, color: AppTheme.textMuted)
-                                                .foregroundStyle(item.isCompleted ? AppTheme.textSecondary : AppTheme.textPrimary)
-                                                .textSelection(.enabled)
-                                            let meta = [item.owner, item.dueDate].filter { !$0.isEmpty && $0 != "待定" && $0 != "TBD" }.joined(separator: " · ")
-                                            if !meta.isEmpty {
-                                                Text(meta)
-                                                    .font(.system(size: 11.5))
-                                                    .foregroundStyle(AppTheme.textSecondary)
-                                            }
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        inlineMarkdownText(item.task)
+                                            .font(.system(size: 13))
+                                            .strikethrough(item.isCompleted, color: AppTheme.textMuted)
+                                            .foregroundStyle(item.isCompleted ? AppTheme.textSecondary : AppTheme.textPrimary)
+                                            .textSelection(.enabled)
+                                        let meta = [item.owner, item.dueDate].filter { !$0.isEmpty && $0 != "待定" && $0 != "TBD" }.joined(separator: " · ")
+                                        if !meta.isEmpty {
+                                            Text(meta)
+                                                .font(.system(size: 11.5))
+                                                .foregroundStyle(AppTheme.textSecondary)
                                         }
                                     }
                                 }
-                            }
-
-                            if isEditing {
-                                HStack(spacing: 6) {
-                                    TextField(L("新增待办...", "New action item..."), text: $newActionTask)
-                                        .textFieldStyle(.roundedBorder)
-                                        .font(.system(size: 12.5))
-                                    TextField(L("负责人", "Owner"), text: $newActionOwner)
-                                        .textFieldStyle(.roundedBorder)
-                                        .font(.system(size: 12))
-                                        .frame(width: 72)
-                                    TextField(L("截止", "Due"), text: $newActionDue)
-                                        .textFieldStyle(.roundedBorder)
-                                        .font(.system(size: 12))
-                                        .frame(width: 72)
-                                    Button(L("添加", "Add")) {
-                                        let t = newActionTask.trimmingCharacters(in: .whitespacesAndNewlines)
-                                        guard !t.isEmpty else { return }
-                                        let owner = newActionOwner.trimmingCharacters(in: .whitespacesAndNewlines)
-                                        let due = newActionDue.trimmingCharacters(in: .whitespacesAndNewlines)
-                                        appState.updateMeeting(id: meeting.id) { m in
-                                            m.minutes.actionItems.append(ActionItem(
-                                                task: t,
-                                                owner: owner.isEmpty ? L("待定", "TBD") : owner,
-                                                dueDate: due
-                                            ))
-                                        }
-                                        newActionTask = ""
-                                        newActionOwner = ""
-                                        newActionDue = ""
-                                    }
-                                    .controlSize(.small)
-                                }
-                                .padding(.top, 4)
                             }
                         }
                     }
@@ -589,7 +446,7 @@ struct DoubaoOutlineMinutesView: View {
                 if !meeting.minutes.openQuestions.isEmpty {
                     outlineSection(L("待确认问题", "Open Questions")) {
                         VStack(alignment: .leading, spacing: 6) {
-                            ForEach(meeting.minutes.openQuestions, id: \.self) { q in
+                            ForEach(Array(meeting.minutes.openQuestions.enumerated()), id: \.offset) { _, q in
                                 HStack(alignment: .top, spacing: 8) {
                                     Text("•")
                                         .foregroundStyle(AppTheme.textSecondary)

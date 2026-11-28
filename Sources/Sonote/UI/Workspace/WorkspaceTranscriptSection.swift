@@ -277,20 +277,27 @@ extension CompletedMeetingDocumentView {
             }
 
             if isEditingRow {
-                HStack(spacing: 6) {
-                    TextField(L("修正逐字稿文本", "Edit transcript text"), text: $editingSegmentDraft)
-                        .textFieldStyle(.roundedBorder)
-                        .font(.system(size: 13))
-                        .onSubmit {
+                VStack(alignment: .trailing, spacing: 6) {
+                    EditorialMultilineField(
+                        placeholder: L("修正逐字稿文本", "Edit transcript text"),
+                        text: $editingSegmentDraft,
+                        minLines: 1,
+                        maxLines: 6,
+                        fontSize: 13
+                    )
+                    HStack(spacing: 8) {
+                        Button(L("取消", "Cancel")) {
+                            editingSegmentID = nil
+                        }
+                        .buttonStyle(.plain)
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(AppTheme.textSecondary)
+
+                        CleanPrimaryButton(title: L("保存", "Save")) {
                             appState.updateSegmentText(meetingID: meeting.id, segmentID: seg.id, newText: editingSegmentDraft)
                             editingSegmentID = nil
                         }
-                    Button(L("取消", "Cancel")) {
-                        editingSegmentID = nil
                     }
-                    .buttonStyle(.plain)
-                    .font(.system(size: 11.5))
-                    .foregroundStyle(AppTheme.textSecondary)
                 }
             } else {
                 highlightedTranscriptText(seg.text, query: transcriptSearchQuery)
@@ -387,10 +394,11 @@ struct SpeakerRenamePopoverView: View {
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(AppTheme.textPrimary)
 
-            TextField(L("输入姓名（如：林致远）", "Enter speaker name (e.g. Alex)"), text: $nameDraft)
-                .textFieldStyle(.roundedBorder)
-                .font(.system(size: 12.5))
-                .onSubmit { submitIfValid() }
+            CleanInputBox(
+                placeholder: L("输入姓名（如：林致远）", "Enter speaker name (e.g. Alex)"),
+                text: $nameDraft,
+                onSubmitAction: submitIfValid
+            )
 
             if !candidateNames.isEmpty {
                 VStack(alignment: .leading, spacing: 5) {

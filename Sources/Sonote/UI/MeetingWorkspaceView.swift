@@ -73,12 +73,20 @@ struct CompletedMeetingDocumentView: View {
         }
     }
 
+    struct MeetingEditDraft: Equatable {
+        var title: String
+        var minutes: SmartMinutes
+        var manualNotes: String
+    }
+
     @StateObject var audioPlayer = MeetingAudioPlayer()
     @State var activeTab: DocTab = .summary
     @State var chatDraft: String = ""
     @State var copiedToast: String? = nil
     @State var showTokenPopover: Bool = false
     @State var isEditingSummary: Bool = false
+    @State var editDraft: MeetingEditDraft? = nil
+    @State var showQuickNotesInEditor: Bool = false
     @State var selectedSpeakerFilter: String? = nil
     @State var starredOnlyFilter: Bool = false
     @State var transcriptSearchQuery: String = ""
@@ -113,25 +121,48 @@ struct CompletedMeetingDocumentView: View {
             DoubaoSoftLightBackdrop()
 
             VStack(alignment: .leading, spacing: 0) {
+                // Fixed Top Safe-Area / Editing Bar (keeps scrolled content clear of macOS traffic lights)
+                topChromeBar
+
                 ScrollViewReader { scrollProxy in
                     ScrollView {
                         VStack(alignment: .leading, spacing: 0) {
-                            Spacer().frame(height: 54)
+                            Spacer().frame(height: 12)
 
                             // Editable Bold Title
-                            TextField(L("新录音", "New Recording"), text: Binding(
-                                get: { meeting.title },
-                                set: { newTitle in
-                                    appState.updateMeeting(id: meeting.id) { $0.title = newTitle }
-                                }
-                            ))
-                            .textFieldStyle(.plain)
-                            .font(.system(size: 25, weight: .bold))
-                            .foregroundStyle(AppTheme.textPrimary)
+                            if isEditingSummary {
+                                TextField(L("会议标题", "Meeting Title"), text: Binding(
+                                    get: { editDraft?.title ?? meeting.title },
+                                    set: { editDraft?.title = $0 }
+                                ))
+                                .textFieldStyle(.plain)
+                                .font(.system(size: 22, weight: .bold))
+                                .foregroundStyle(AppTheme.textPrimary)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 9, style: .continuous)
+                                        .fill(AppTheme.inputBackground)
+                                )
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 9, style: .continuous)
+                                        .strokeBorder(AppTheme.inputBorder, lineWidth: 1)
+                                )
+                            } else {
+                                TextField(L("新录音", "New Recording"), text: Binding(
+                                    get: { meeting.title },
+                                    set: { newTitle in
+                                        appState.updateMeeting(id: meeting.id) { $0.title = newTitle }
+                                    }
+                                ))
+                                .textFieldStyle(.plain)
+                                .font(.system(size: 25, weight: .bold))
+                                .foregroundStyle(AppTheme.textPrimary)
+                            }
 
                             // Duration, Token Usage & Tags Subtitle
                             metadataHeaderRow
-                                .padding(.top, 6)
+                                .padding(.top, 8)
 
                             // Document Content
                             if meeting.status == .summarizing || appState.isGeneratingMinutes {
@@ -153,15 +184,21 @@ struct CompletedMeetingDocumentView: View {
                                 switch activeTab {
                                 case .summary:
                                     VStack(alignment: .leading, spacing: 22) {
-                                        if meeting.minutes.isEmpty {
+                                        if meeting.minutes.isEmpty && !isEditingSummary {
                                             Text(L("暂无结构化总结，点击右上角「重新生成」即可由 AI 生成会议纪要。", "No summary yet. Click \"Regenerate\" in the top right to create AI minutes."))
                                                 .font(.system(size: 14))
                                                 .foregroundStyle(AppTheme.textSecondary)
+                                        } else if isEditingSummary {
+                                            StructuredMinutesEditorView(
+                                                minutes: Binding(
+                                                    get: { editDraft?.minutes ?? meeting.minutes },
+                                                    set: { editDraft?.minutes = $0 }
+                                                )
+                                            )
                                         } else {
                                             DoubaoOutlineMinutesView(
                                                 meeting: meeting,
-                                                appState: appState,
-                                                isEditing: isEditingSummary
+                                                appState: appState
                                             )
                                         }
 
@@ -190,7 +227,7 @@ struct CompletedMeetingDocumentView: View {
                             }
                         }
                         .padding(.horizontal, 44)
-                        .padding(.bottom, activeTab == .askAI ? 16 : 24)
+                        .padding(.bottom, activeTab == .askAI ? 16 : 28)
                     }
                     .onChange(of: meeting.chatHistory.count) { _, _ in
                         if activeTab == .askAI {
@@ -218,7 +255,7 @@ struct CompletedMeetingDocumentView: View {
                     AudioPlaybackStrip(player: audioPlayer, autoFollowTranscript: $autoFollowTranscript)
                         .padding(.horizontal, 40)
                         .padding(.top, 4)
-                        .padding(.bottom, 2)
+                        .padding(.bottom, isEditingSummary ? 12 : 2)
                 }
 
                 // Pinned AI Composer when on the "问 AI" tab
@@ -238,10 +275,12 @@ struct CompletedMeetingDocumentView: View {
                     .padding(.bottom, 4)
                 }
 
-                // Bottom Action Bar
-                bottomActionBar
-                    .padding(.horizontal, 40)
-                    .padding(.vertical, 16)
+                // Bottom Action Bar (hidden during focused minutes editing to maximize canvas space)
+                if !isEditingSummary {
+                    bottomActionBar
+                        .padding(.horizontal, 40)
+                        .padding(.vertical, 16)
+                }
             }
 
             // Hidden Spacebar shortcut for audio play/pause when not typing in a text field
@@ -259,6 +298,7 @@ struct CompletedMeetingDocumentView: View {
         }
         .onChange(of: meeting.id) { _, _ in
             isEditingSummary = false
+            editDraft = nil
             selectedSpeakerFilter = nil
             starredOnlyFilter = false
             transcriptSearchQuery = ""
@@ -269,6 +309,128 @@ struct CompletedMeetingDocumentView: View {
         .onDisappear {
             audioPlayer.stop()
         }
+    }
+
+    // MARK: - Top Safe-Area Chrome & Sticky Editing Bar
+
+    @ViewBuilder
+    private var topChromeBar: some View {
+        if isEditingSummary {
+            VStack(spacing: 0) {
+                HStack(spacing: 10) {
+                    // Leave full clearance for macOS window traffic lights
+                    Spacer().frame(width: 72)
+
+                    HStack(spacing: 6) {
+                        Image(systemName: "pencil.line")
+                            .font(.system(size: 11, weight: .semibold))
+                        Text(L("正在编辑纪要", "Editing Minutes"))
+                            .font(.system(size: 12, weight: .semibold))
+                    }
+                    .foregroundStyle(AppTheme.brandPrimary)
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 4)
+                    .background(Capsule().fill(AppTheme.brandSoftFill))
+
+                    Text(L("⌘⏎ 保存 · Esc 取消", "⌘⏎ Save · Esc Cancel"))
+                        .font(.system(size: 11))
+                        .foregroundStyle(AppTheme.textMuted)
+                        .lineLimit(1)
+
+                    Spacer()
+
+                    Button {
+                        cancelEditing()
+                    } label: {
+                        Text(L("取消", "Cancel"))
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(AppTheme.textSecondary)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 5.5)
+                            .background(
+                                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                    .fill(AppTheme.elevatedSurface)
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                    .strokeBorder(AppTheme.subtleBorder, lineWidth: 1)
+                            )
+                            .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                    .keyboardShortcut(.cancelAction)
+
+                    CleanPrimaryButton(
+                        title: L("保存完成", "Save"),
+                        icon: "checkmark"
+                    ) {
+                        commitEditing()
+                    }
+                    .keyboardShortcut(.return, modifiers: .command)
+                }
+                .padding(.trailing, 20)
+                .frame(height: 44)
+                .background(AppTheme.elevatedSurface.opacity(0.92))
+
+                Divider().overlay(AppTheme.divider)
+            }
+        } else {
+            HStack {
+                Spacer().frame(width: 72)
+                Spacer()
+                if let toast = copiedToast {
+                    Text(toast)
+                        .font(.system(size: 11.5, weight: .medium))
+                        .foregroundStyle(AppTheme.brandPrimary)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 3.5)
+                        .background(Capsule().fill(AppTheme.brandSoftFill))
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                }
+            }
+            .padding(.trailing, 20)
+            .frame(height: 36)
+        }
+    }
+
+    func beginEditing() {
+        editDraft = MeetingEditDraft(
+            title: meeting.title,
+            minutes: meeting.minutes,
+            manualNotes: meeting.manualNotes
+        )
+        showQuickNotesInEditor = !meeting.manualNotes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        withAnimation(.easeInOut(duration: 0.16)) {
+            isEditingSummary = true
+        }
+    }
+
+    func cancelEditing() {
+        withAnimation(.easeInOut(duration: 0.16)) {
+            isEditingSummary = false
+            editDraft = nil
+        }
+    }
+
+    func commitEditing() {
+        guard let draft = editDraft else {
+            withAnimation(.easeInOut(duration: 0.16)) { isEditingSummary = false }
+            return
+        }
+        let cleanedMinutes = draft.minutes.sanitizedForSave()
+        let cleanedTitle = draft.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        appState.updateMeeting(id: meeting.id) { m in
+            if !cleanedTitle.isEmpty {
+                m.title = cleanedTitle
+            }
+            m.minutes = cleanedMinutes
+            m.manualNotes = draft.manualNotes
+        }
+        withAnimation(.easeInOut(duration: 0.16)) {
+            isEditingSummary = false
+            editDraft = nil
+        }
+        showToast(L("已保存修改", "Saved"))
     }
 
     // MARK: - Header Metadata & Tags Row
@@ -347,19 +509,22 @@ struct CompletedMeetingDocumentView: View {
                     Text(L("添加会议标签", "Add Meeting Tag"))
                         .font(.system(size: 12.5, weight: .semibold))
                     HStack(spacing: 6) {
-                        TextField(L("例如：产品周会、技术评审", "e.g. Weekly Sync, Design"), text: $newTagDraft)
-                            .textFieldStyle(.roundedBorder)
-                            .font(.system(size: 12))
-                            .onSubmit {
-                                appState.addTag(newTagDraft, to: meeting.id)
-                                showAddTagPopover = false
-                            }
-                        Button(L("添加", "Add")) {
+                        CleanInputBox(
+                            placeholder: L("例如：产品周会、技术评审", "e.g. Weekly Sync, Design"),
+                            text: $newTagDraft
+                        ) {
+                            let trimmed = newTagDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+                            guard !trimmed.isEmpty else { return }
+                            appState.addTag(trimmed, to: meeting.id)
+                            showAddTagPopover = false
+                        }
+                        CleanPrimaryButton(
+                            title: L("添加", "Add"),
+                            disabled: newTagDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                        ) {
                             appState.addTag(newTagDraft, to: meeting.id)
                             showAddTagPopover = false
                         }
-                        .controlSize(.small)
-                        .disabled(newTagDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     }
                     let existing = appState.allMeetingTags.filter { !meeting.tags.contains($0) }
                     if !existing.isEmpty {
@@ -391,9 +556,11 @@ struct CompletedMeetingDocumentView: View {
         HStack(spacing: 8) {
             ForEach(DocTab.allCases) { tab in
                 Button {
+                    if isEditingSummary && tab != .summary {
+                        commitEditing()
+                    }
                     withAnimation(.easeInOut(duration: 0.14)) {
                         activeTab = tab
-                        if tab != .summary { isEditingSummary = false }
                     }
                 } label: {
                     VStack(spacing: 7) {
@@ -413,74 +580,96 @@ struct CompletedMeetingDocumentView: View {
             }
 
             if activeTab == .summary || activeTab == .mindMap {
-                Menu {
-                    ForEach(MinutesTemplate.allCases) { tpl in
-                        Button {
-                            appState.setTemplate(tpl, for: meeting.id, regenerate: true)
-                        } label: {
-                            if meeting.customTemplateID == nil && meeting.template == tpl {
-                                Label(tpl.displayName, systemImage: "checkmark")
-                            } else {
-                                Text(tpl.displayName)
-                            }
-                        }
+                if isEditingSummary {
+                    // During active manual editing, hide Template & Regenerate to prevent accidental overwrite
+                    HStack(spacing: 5) {
+                        Circle()
+                            .fill(AppTheme.brandPrimary)
+                            .frame(width: 6, height: 6)
+                        Text(L("编辑模式", "Editing"))
+                            .font(.system(size: 11.5, weight: .medium))
+                            .foregroundStyle(AppTheme.brandPrimary)
                     }
-                    if !appState.settings.customTemplates.isEmpty {
-                        Divider()
-                        ForEach(appState.settings.customTemplates) { custom in
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 5)
+                    .background(Capsule().fill(AppTheme.brandSoftFill))
+                } else {
+                    Menu {
+                        ForEach(MinutesTemplate.allCases) { tpl in
                             Button {
-                                appState.setCustomTemplate(custom, for: meeting.id, regenerate: true)
+                                appState.setTemplate(tpl, for: meeting.id, regenerate: true)
                             } label: {
-                                if meeting.customTemplateID == custom.id {
-                                    Label(custom.name, systemImage: "checkmark")
+                                if meeting.customTemplateID == nil && meeting.template == tpl {
+                                    Label(tpl.displayName, systemImage: "checkmark")
                                 } else {
-                                    Text(custom.name)
+                                    Text(tpl.displayName)
                                 }
                             }
                         }
-                    }
-                } label: {
-                    HStack(spacing: 3) {
-                        Text(GPTClient.resolveTemplate(for: meeting, settings: appState.settings).name)
-                            .font(.system(size: 11.5))
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: 9))
-                    }
-                    .foregroundStyle(AppTheme.textSecondary)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 5)
-                    .background(Capsule().fill(AppTheme.softCardBg))
-                    .contentShape(Capsule())
-                }
-                .menuStyle(.borderlessButton)
-                .fixedSize()
-                .help(L("切换场景纪要模板并重新生成", "Switch template and regenerate"))
-
-                if activeTab == .summary && !meeting.minutes.isEmpty {
-                    Button {
-                        isEditingSummary.toggle()
+                        if !appState.settings.customTemplates.isEmpty {
+                            Divider()
+                            ForEach(appState.settings.customTemplates) { custom in
+                                Button {
+                                    appState.setCustomTemplate(custom, for: meeting.id, regenerate: true)
+                                } label: {
+                                    if meeting.customTemplateID == custom.id {
+                                        Label(custom.name, systemImage: "checkmark")
+                                    } else {
+                                        Text(custom.name)
+                                    }
+                                }
+                            }
+                        }
                     } label: {
-                        Text(isEditingSummary ? L("完成", "Done") : L("编辑", "Edit"))
-                            .font(.system(size: 12, weight: isEditingSummary ? .medium : .regular))
-                            .foregroundStyle(isEditingSummary ? AppTheme.brandPrimary : AppTheme.textSecondary)
+                        HStack(spacing: 3) {
+                            Text(GPTClient.resolveTemplate(for: meeting, settings: appState.settings).name)
+                                .font(.system(size: 11.5))
+                            Image(systemName: "chevron.down")
+                                .font(.system(size: 9))
+                        }
+                        .foregroundStyle(AppTheme.textSecondary)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 5)
+                        .background(Capsule().fill(AppTheme.softCardBg))
+                        .contentShape(Capsule())
+                    }
+                    .menuStyle(.borderlessButton)
+                    .fixedSize()
+                    .help(L("切换场景纪要模板并重新生成", "Switch template and regenerate"))
+
+                    if activeTab == .summary && !meeting.minutes.isEmpty {
+                        Button {
+                            beginEditing()
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: "pencil")
+                                    .font(.system(size: 10.5, weight: .medium))
+                                Text(L("编辑", "Edit"))
+                                    .font(.system(size: 11.5, weight: .medium))
+                            }
+                            .foregroundStyle(AppTheme.textPrimary.opacity(0.85))
+                            .padding(.horizontal, 9)
+                            .padding(.vertical, 5)
+                            .background(Capsule().fill(AppTheme.softCardBg))
+                            .overlay(Capsule().strokeBorder(AppTheme.subtleBorder, lineWidth: 0.8))
+                            .contentShape(Capsule())
+                        }
+                        .buttonStyle(.plain)
+                        .help(L("编辑纪要内容与结构", "Edit minutes content & structure"))
+                    }
+
+                    Button {
+                        Task { await appState.refreshMinutesNow(for: meeting.id, isFinal: true) }
+                    } label: {
+                        Text(L("重新生成", "Regenerate"))
+                            .font(.system(size: 12))
+                            .foregroundStyle(AppTheme.textSecondary)
                             .padding(.horizontal, 8)
                             .padding(.vertical, 6)
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                 }
-
-                Button {
-                    Task { await appState.refreshMinutesNow(for: meeting.id, isFinal: true) }
-                } label: {
-                    Text(L("重新生成", "Regenerate"))
-                        .font(.system(size: 12))
-                        .foregroundStyle(AppTheme.textSecondary)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 6)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
             }
         }
     }
@@ -665,36 +854,56 @@ struct CompletedMeetingDocumentView: View {
 
     private var manualNotesCard: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 6) {
-                Image(systemName: "note.text")
-                    .font(.system(size: 11.5))
-                    .foregroundStyle(AppTheme.brandPrimary)
-                Text(L("会中随手记", "Quick Notes"))
-                    .font(.system(size: 13.5, weight: .semibold))
-                    .foregroundStyle(AppTheme.textPrimary)
-                Spacer()
-                if isEditingSummary {
-                    Text(L("修改后可点击右上角「重新生成」融入纪要", "Click \"Regenerate\" after editing to fold notes into minutes"))
-                        .font(.system(size: 11))
-                        .foregroundStyle(AppTheme.textMuted)
-                }
-            }
-
             if isEditingSummary {
-                TextEditor(text: Binding(
-                    get: { meeting.manualNotes },
-                    set: { newVal in
-                        appState.updateMeeting(id: meeting.id) { $0.manualNotes = newVal }
+                // Collapsible secondary section during minutes editing to avoid clutter & conflicting hints
+                Button {
+                    withAnimation(.easeInOut(duration: 0.16)) {
+                        showQuickNotesInEditor.toggle()
                     }
-                ))
-                .font(.system(size: 13))
-                .foregroundStyle(AppTheme.textPrimary)
-                .scrollContentBackground(.hidden)
-                .frame(minHeight: 72)
-                .padding(10)
-                .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(AppTheme.inputBackground))
-                .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(AppTheme.inputBorder, lineWidth: 1))
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: showQuickNotesInEditor ? "chevron.down" : "chevron.right")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(AppTheme.textMuted)
+                            .frame(width: 12)
+                        Image(systemName: "note.text")
+                            .font(.system(size: 11.5))
+                            .foregroundStyle(AppTheme.brandPrimary)
+                        Text(L("会中随手记", "Quick Notes"))
+                            .font(.system(size: 12.5, weight: .semibold))
+                            .foregroundStyle(AppTheme.textSecondary)
+                        Spacer()
+                        Text(L("随本次编辑一起保存", "Saved alongside minutes"))
+                            .font(.system(size: 11))
+                            .foregroundStyle(AppTheme.textMuted)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+
+                if showQuickNotesInEditor {
+                    EditorialMultilineField(
+                        placeholder: L("补充会议备注、上下文链接或会中灵感...", "Add personal notes, links, or extra context..."),
+                        text: Binding(
+                            get: { editDraft?.manualNotes ?? meeting.manualNotes },
+                            set: { editDraft?.manualNotes = $0 }
+                        ),
+                        minLines: 3,
+                        maxLines: 10,
+                        fontSize: 13
+                    )
+                }
             } else {
+                HStack(spacing: 6) {
+                    Image(systemName: "note.text")
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(AppTheme.brandPrimary)
+                    Text(L("会中随手记", "Quick Notes"))
+                        .font(.system(size: 13.5, weight: .semibold))
+                        .foregroundStyle(AppTheme.textPrimary)
+                    Spacer()
+                }
+
                 Text(meeting.manualNotes)
                     .font(.system(size: 13))
                     .foregroundStyle(AppTheme.textSecondary)
@@ -705,6 +914,7 @@ struct CompletedMeetingDocumentView: View {
                     .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(AppTheme.softCardBg))
             }
         }
+        .padding(.top, isEditingSummary ? 4 : 0)
     }
 
     func sendChat() {

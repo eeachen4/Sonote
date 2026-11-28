@@ -1396,6 +1396,41 @@ final class SonoteTests: XCTestCase {
 
     // MARK: - Opt-in Live End-to-End Verification (SONOTE_LIVE_VERIFY=1)
 
+    func testSmartMinutesSanitizedForSaveRemovesBlanksAndTrimsFields() {
+        let dirty = SmartMinutes(
+            suggestedTitle: "  产品评审会  ",
+            overview: "  完成结构化编辑器改造。 \n ",
+            topics: [
+                TopicSection(title: "  架构升级  ", points: ["  支持自动换行  ", "   ", "支持增删议题"]),
+                TopicSection(title: "   ", points: ["", " \n "]),
+                TopicSection(title: "仅标题议题", points: ["   "])
+            ],
+            decisions: ["  启用快照撤销  ", "   "],
+            actionItems: [
+                ActionItem(task: "  补充单元测试  ", owner: " Alex ", dueDate: " 周五 "),
+                ActionItem(task: "   ", owner: "无人", dueDate: "")
+            ],
+            openQuestions: ["  是否同步到 Obsidian  ", "   "],
+            rawMarkdownFallback: "   "
+        )
+
+        let cleaned = dirty.sanitizedForSave()
+        XCTAssertEqual(cleaned.suggestedTitle, "产品评审会")
+        XCTAssertEqual(cleaned.overview, "完成结构化编辑器改造。")
+        XCTAssertEqual(cleaned.topics.count, 2)
+        XCTAssertEqual(cleaned.topics[0].title, "架构升级")
+        XCTAssertEqual(cleaned.topics[0].points, ["支持自动换行", "支持增删议题"])
+        XCTAssertEqual(cleaned.topics[1].title, "仅标题议题")
+        XCTAssertEqual(cleaned.topics[1].points, [])
+        XCTAssertEqual(cleaned.decisions, ["启用快照撤销"])
+        XCTAssertEqual(cleaned.actionItems.count, 1)
+        XCTAssertEqual(cleaned.actionItems[0].task, "补充单元测试")
+        XCTAssertEqual(cleaned.actionItems[0].owner, "Alex")
+        XCTAssertEqual(cleaned.actionItems[0].dueDate, "周五")
+        XCTAssertEqual(cleaned.openQuestions, ["是否同步到 Obsidian"])
+        XCTAssertNil(cleaned.rawMarkdownFallback)
+    }
+
     func testLiveEnvironmentAndGPTIntegration() async throws {
         guard ProcessInfo.processInfo.environment["SONOTE_LIVE_VERIFY"] == "1" else {
             throw XCTSkip("Set SONOTE_LIVE_VERIFY=1 to run live macOS & GPT integration verification.")

@@ -159,6 +159,48 @@ public struct SmartMinutes: Codable, Equatable, Sendable {
         }
         return nil
     }
+
+    /// Trims whitespace and removes empty placeholder entries created during manual editing.
+    public func sanitizedForSave() -> SmartMinutes {
+        var copy = self
+        copy.suggestedTitle = suggestedTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        copy.overview = overview.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        copy.topics = topics.compactMap { topic in
+            let title = topic.title.trimmingCharacters(in: .whitespacesAndNewlines)
+            let points = topic.points
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+            if title.isEmpty && points.isEmpty { return nil }
+            return TopicSection(id: topic.id, title: title, points: points)
+        }
+
+        copy.decisions = decisions
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+
+        copy.actionItems = actionItems.compactMap { item in
+            let task = item.task.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !task.isEmpty else { return nil }
+            var cleaned = item
+            cleaned.task = task
+            cleaned.owner = item.owner.trimmingCharacters(in: .whitespacesAndNewlines)
+            cleaned.dueDate = item.dueDate.trimmingCharacters(in: .whitespacesAndNewlines)
+            return cleaned
+        }
+
+        copy.openQuestions = openQuestions
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+
+        if let raw = rawMarkdownFallback {
+            let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            copy.rawMarkdownFallback = trimmed.isEmpty ? nil : trimmed
+        }
+
+        copy.lastUpdatedAt = Date()
+        return copy
+    }
 }
 
 public struct TokenUsage: Codable, Equatable, Sendable {
