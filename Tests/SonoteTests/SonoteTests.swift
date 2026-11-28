@@ -1482,6 +1482,20 @@ final class SonoteTests: XCTestCase {
         XCTAssertEqual(explicit2.timestamp, 3845, accuracy: 0.01)
         XCTAssertEqual(explicit2.formattedTimestamp, "1:04:05")
 
+        // 1b. Stripping explicit [MM:SS] / 【MM:SS】 citations cleanly for static PNG exports & overview text
+        XCTAssertEqual(
+            MinutesTimestampMatcher.strippingExplicitCitations(in: "确定周五前完成端侧 MLX 联调 [02:18]。"),
+            "确定周五前完成端侧 MLX 联调。"
+        )
+        XCTAssertEqual(
+            MinutesTimestampMatcher.strippingExplicitCitations(in: "Synced milestones [00:12] and release checklist 【01:05:20】"),
+            "Synced milestones and release checklist"
+        )
+        XCTAssertEqual(
+            MinutesTimestampMatcher.strippingExplicitCitations(in: "[00:12]"),
+            "[00:12]"
+        )
+
         // 2. Automatic local fallback matching against transcript segments when no [MM:SS] tag exists
         let segs = [
             TranscriptSegment(timestamp: 15, speaker: .remote, speakerLabel: "Alex", text: "今天我们重点讨论 Qwen3-ASR 离线转写和 DeepFilterNet3 降噪效果。"),

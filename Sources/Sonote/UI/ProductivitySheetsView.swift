@@ -129,7 +129,7 @@ struct GlobalActionItemsSheet: View {
                     TextField(L("搜索待办、负责人或会议...", "Search tasks, owners, meetings..."), text: $searchQuery)
                         .textFieldStyle(.plain)
                         .font(.system(size: 12))
-                        .frame(width: 175)
+                        .frame(width: theme.isEnglish ? 205 : 175)
                     if !searchQuery.isEmpty {
                         Button { searchQuery = "" } label: {
                             Image(systemName: "xmark.circle.fill")

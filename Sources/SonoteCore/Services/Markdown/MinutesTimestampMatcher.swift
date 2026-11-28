@@ -23,6 +23,17 @@ public enum MinutesTimestampMatcher {
         options: []
     )
 
+    /// Strips all explicit `[MM:SS]` / `[H:MM:SS]` / `【MM:SS】` citation markers from text
+    /// (used for static PNG exports, non-interactive views, and clean summaries).
+    public static func strippingExplicitCitations(in text: String) -> String {
+        guard let regex = explicitRegex else { return text }
+        let nsRange = NSRange(text.startIndex..<text.endIndex, in: text)
+        let stripped = regex.stringByReplacingMatches(in: text, options: [], range: nsRange, withTemplate: "")
+            .replacingOccurrences(of: "  ", with: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return stripped.isEmpty ? text : stripped
+    }
+
     /// Parses an explicit `[MM:SS]` or `[H:MM:SS]` citation embedded in a bullet string.
     public static func parseExplicitCitation(in text: String) -> Match? {
         guard let regex = explicitRegex else { return nil }

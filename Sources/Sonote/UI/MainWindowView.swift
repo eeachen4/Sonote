@@ -324,7 +324,7 @@ struct MainWindowView: View {
                                                 .textFieldStyle(.plain)
                                                 .font(.system(size: 12))
                                                 .focused($isHomeSearchFocused)
-                                                .frame(width: 175)
+                                                .frame(width: theme.isEnglish ? 215 : 175)
                                             if !searchText.isEmpty {
                                                 Button {
                                                     searchText = ""

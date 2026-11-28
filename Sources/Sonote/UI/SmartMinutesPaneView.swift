@@ -235,6 +235,11 @@ struct DoubaoMindMapView: View {
 
             mindMapCanvas(interactive: true)
         }
+        .onAppear {
+            if citationCache.isEmpty {
+                rebuildCitationCache()
+            }
+        }
         .task(id: citationCacheKey) {
             rebuildCitationCache()
         }
@@ -333,7 +338,7 @@ struct DoubaoMindMapView: View {
                             title: L("会议概览", "Overview"),
                             items: [meeting.minutes.overview],
                             interactive: interactive,
-                            allowCitations: false
+                            allowCitations: true
                         )
                     }
 
@@ -445,13 +450,14 @@ struct DoubaoMindMapView: View {
                 VStack(alignment: .leading, spacing: 6) {
                     ForEach(Array(items.enumerated()), id: \.offset) { _, point in
                         let citation = (interactive && allowCitations && onJumpToTimestamp != nil) ? citationCache[point] : nil
+                        let renderedText = citation?.displayText ?? MinutesTimestampMatcher.strippingExplicitCitations(in: point)
                         HStack(alignment: .top, spacing: 7) {
                             Circle()
                                 .fill(AppTheme.brandPrimary.opacity(0.5))
                                 .frame(width: 4.5, height: 4.5)
                                 .padding(.top, 6)
                             HStack(alignment: .firstTextBaseline, spacing: 6) {
-                                inlineMarkdownText(citation?.displayText ?? point)
+                                inlineMarkdownText(renderedText)
                                     .font(.system(size: 13))
                                     .foregroundStyle(AppTheme.textPrimary.opacity(0.9))
                                     .lineSpacing(4)
@@ -546,7 +552,7 @@ struct DoubaoMindMapView: View {
                             .buttonStyle(.plain)
                             .padding(.top, 1)
 
-                            inlineMarkdownText(actionItemDisplayText(item))
+                            inlineMarkdownText(MinutesTimestampMatcher.strippingExplicitCitations(in: actionItemDisplayText(item)))
                                 .font(.system(size: 13))
                                 .strikethrough(item.isCompleted, color: AppTheme.textMuted)
                                 .foregroundStyle(item.isCompleted ? AppTheme.textSecondary : AppTheme.textPrimary)
@@ -567,6 +573,9 @@ struct DoubaoMindMapView: View {
         }
         let segments = meeting.segments
         var candidates: [String] = []
+        if !meeting.minutes.overview.isEmpty {
+            candidates.append(meeting.minutes.overview)
+        }
         for topic in meeting.minutes.topics { candidates.append(contentsOf: topic.points) }
         candidates.append(contentsOf: meeting.minutes.decisions)
         candidates.append(contentsOf: meeting.minutes.openQuestions)
@@ -654,12 +663,24 @@ struct DoubaoOutlineMinutesView: View {
                 MarkdownContentView(markdown: fallback, fontSize: 13.5)
             } else {
                 if !meeting.minutes.overview.isEmpty {
+                    let overviewCitation = onJumpToTimestamp != nil ? citationCache[meeting.minutes.overview] : nil
+                    let overviewText = overviewCitation?.displayText
+                        ?? MinutesTimestampMatcher.strippingExplicitCitations(in: meeting.minutes.overview)
                     outlineSection(L("摘要", "Summary")) {
-                        inlineMarkdownText(meeting.minutes.overview)
-                            .font(.system(size: 13.5))
-                            .foregroundStyle(AppTheme.textPrimary)
-                            .lineSpacing(5)
-                            .textSelection(.enabled)
+                        HStack(alignment: .firstTextBaseline, spacing: 6) {
+                            inlineMarkdownText(overviewText)
+                                .font(.system(size: 13.5))
+                                .foregroundStyle(AppTheme.textPrimary)
+                                .lineSpacing(5)
+                                .textSelection(.enabled)
+
+                            if let overviewCitation, let jump = onJumpToTimestamp {
+                                timestampJumpPill(overviewCitation) {
+                                    jump(overviewCitation.timestamp)
+                                }
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     }
                 }
 
@@ -717,7 +738,7 @@ struct DoubaoOutlineMinutesView: View {
 
                                     VStack(alignment: .leading, spacing: 2) {
                                         HStack(alignment: .firstTextBaseline, spacing: 6) {
-                                            inlineMarkdownText(citation?.displayText ?? item.task)
+                                            inlineMarkdownText(citation?.displayText ?? MinutesTimestampMatcher.strippingExplicitCitations(in: item.task))
                                                 .font(.system(size: 13))
                                                 .strikethrough(item.isCompleted, color: AppTheme.textMuted)
                                                 .foregroundStyle(item.isCompleted ? AppTheme.textSecondary : AppTheme.textPrimary)
@@ -755,6 +776,11 @@ struct DoubaoOutlineMinutesView: View {
                 }
             }
         }
+        .onAppear {
+            if citationCache.isEmpty {
+                rebuildCitationCache()
+            }
+        }
         .task(id: citationCacheKey) {
             rebuildCitationCache()
         }
@@ -767,6 +793,9 @@ struct DoubaoOutlineMinutesView: View {
         }
         let segments = meeting.segments
         var candidates: [String] = []
+        if !meeting.minutes.overview.isEmpty {
+            candidates.append(meeting.minutes.overview)
+        }
         for topic in meeting.minutes.topics {
             candidates.append(contentsOf: topic.points)
         }
@@ -787,11 +816,12 @@ struct DoubaoOutlineMinutesView: View {
     @ViewBuilder
     private func citedBulletRow(text: String, bulletColor: Color, textColor: Color) -> some View {
         let citation = onJumpToTimestamp != nil ? citationCache[text] : nil
+        let renderedText = citation?.displayText ?? MinutesTimestampMatcher.strippingExplicitCitations(in: text)
         HStack(alignment: .top, spacing: 8) {
             Text("•")
                 .foregroundStyle(bulletColor)
             HStack(alignment: .firstTextBaseline, spacing: 6) {
-                inlineMarkdownText(citation?.displayText ?? text)
+                inlineMarkdownText(renderedText)
                     .font(.system(size: 13))
                     .foregroundStyle(textColor)
                     .lineSpacing(4)
